@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/natalie-johanek/trench-analytics/internal/db"
+	"github.com/natalie-johanek/trench-analytics/internal/logging"
 	"github.com/natalie-johanek/trench-analytics/internal/models"
 )
 
@@ -109,10 +110,17 @@ func (h *Handlers) GetFactionStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, totalGames, err := db.QueryFactionStats(r.Context(), h.DB.Pool(), f)
 	if err != nil {
-		slog.Error("query faction stats", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query faction stats")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query faction stats")
 		return
 	}
+
+	logging.FromContext(r.Context()).Set(
+		"endpoint", "factions",
+		"filters", filtersToResponse(f),
+		"result_count", len(stats),
+		"total_games", totalGames,
+	)
 
 	writeJSON(w, http.StatusOK, models.FactionStatsResponse{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -132,7 +140,7 @@ func (h *Handlers) GetUnitStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := db.QueryUnitStats(r.Context(), h.DB.Pool(), f)
 	if err != nil {
-		slog.Error("query unit stats", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query unit stats")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query unit stats")
 		return
 	}
@@ -156,7 +164,7 @@ func (h *Handlers) GetEquipmentStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := db.QueryEquipmentStats(r.Context(), h.DB.Pool(), f, unitID)
 	if err != nil {
-		slog.Error("query equipment stats", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query equipment stats")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query equipment stats")
 		return
 	}
@@ -178,7 +186,7 @@ func (h *Handlers) GetScenarioStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := db.QueryScenarioStats(r.Context(), h.DB.Pool(), f)
 	if err != nil {
-		slog.Error("query scenario stats", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query scenario stats")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query scenario stats")
 		return
 	}
@@ -200,7 +208,7 @@ func (h *Handlers) GetWarbandCostStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := db.QueryWarbandCostStats(r.Context(), h.DB.Pool(), f)
 	if err != nil {
-		slog.Error("query warband cost stats", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query warband cost stats")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query warband cost stats")
 		return
 	}
@@ -222,7 +230,7 @@ func (h *Handlers) GetDeedStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := db.QueryDeedStats(r.Context(), h.DB.Pool(), f)
 	if err != nil {
-		slog.Error("query deed stats", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query deed stats")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query deed stats")
 		return
 	}
@@ -238,7 +246,7 @@ func (h *Handlers) GetDeedStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetSummary(w http.ResponseWriter, r *http.Request) {
 	s, err := db.QuerySummary(r.Context(), h.DB.Pool())
 	if err != nil {
-		slog.Error("query summary", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query summary")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query summary")
 		return
 	}
@@ -249,7 +257,7 @@ func (h *Handlers) GetSummary(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetMeta(w http.ResponseWriter, r *http.Request) {
 	m, err := db.QueryMeta(r.Context(), h.DB.Pool())
 	if err != nil {
-		slog.Error("query meta", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query meta")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query meta")
 		return
 	}
@@ -260,7 +268,7 @@ func (h *Handlers) GetMeta(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetHealth(w http.ResponseWriter, r *http.Request) {
 	run, err := db.QueryLatestIngestion(r.Context(), h.DB.Pool())
 	if err != nil {
-		slog.Error("query health", "err", err)
+		logging.FromContext(r.Context()).Set("error", err.Error(), "error_source", "query health")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to query health")
 		return
 	}

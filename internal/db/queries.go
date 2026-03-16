@@ -137,7 +137,7 @@ func QueryFactionStats(ctx context.Context, pool *sql.DB, f QueryFilters) ([]mod
 			COUNT(*) FILTER (WHERE gp.result = 'draw'),
 			COUNT(*),
 			ROUND(COUNT(*) FILTER (WHERE gp.result = 'win') * 1.0 / COUNT(*), 4),
-			ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2),
+			ROUND(COUNT(*) * 1.0 / SUM(COUNT(*)) OVER (), 4),
 			ROUND(AVG(gp.warband_ducats))
 		FROM game_participants gp
 		JOIN games g ON g.game_report_id = gp.game_report_id

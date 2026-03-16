@@ -29,7 +29,7 @@ All new features and bug fixes follow the TDD red-green-refactor cycle:
 ```
 TrenchCompanionStats/
 ├── cmd/analytics/
-│   └── main_test.go                    # CLI arg parsing, env var helpers, run() dispatch
+│   └── main_test.go                    # CLI arg parsing, env var helpers
 ├── internal/
 │   ├── api/
 │   │   ├── handlers_test.go            # Handler integration tests (httptest + in-memory DB)
@@ -38,17 +38,17 @@ TrenchCompanionStats/
 │   ├── db/
 │   │   ├── faction_lookup_test.go      # Faction parsing unit tests
 │   │   └── queries_test.go             # Query integration tests (in-memory DuckDB)
-│   ├── ingestion/
-│   │   ├── client_test.go              # HTTP client unit tests (httptest server)
-│   │   ├── sync_test.go                # Sync orchestrator integration tests
-│   │   ├── transform_test.go           # Transform pipeline unit tests
-│   │   └── testdata/
-│   │       └── valid_report_raw.json   # Real report fixture from Synod API
-│   └── models/
-│       └── synod_test.go               # AllUnits unit tests
+│   └── ingestion/
+│       ├── client_test.go              # HTTP client unit tests (httptest server)
+│       ├── sync_test.go                # Sync orchestrator integration tests
+│       ├── transform_test.go           # Transform pipeline unit tests
+│       └── testdata/
+│           └── valid_report_raw.json   # Real report fixture from Synod API
 └── tests/
     └── integration_test.go             # E2E tests: full pipeline, auth, filters
 ```
+
+`internal/logging/` and `internal/models/` have no test files — `logging` is a thin wrapper over `slog`, and `models` is pure types with no logic (AllUnits is tested transitively via transform tests).
 
 **Unit tests** (`internal/*/`) — alongside source, white-box, test internal functions directly.
 **Integration/E2E tests** (`tests/`) — black-box, spin up full server + fake Synod API, hit real HTTP endpoints.

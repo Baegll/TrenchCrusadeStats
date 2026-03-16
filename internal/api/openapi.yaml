@@ -1,0 +1,719 @@
+openapi: "3.0.3"
+info:
+  title: Trench Crusade Analytics API
+  description: Game statistics and analytics for Trench Crusade Companion.
+  version: "1.0.0"
+
+servers:
+  - url: /
+
+tags:
+  - name: health
+    description: Service health
+  - name: stats
+    description: Game statistics (API key required)
+  - name: admin
+    description: Admin operations (basic auth required)
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BasicAuth:
+      type: http
+      scheme: basic
+
+  parameters:
+    RankedOnly:
+      name: ranked_only
+      in: query
+      schema:
+        type: boolean
+        default: true
+    MinGames:
+      name: min_games
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 10000
+        default: 5
+    Since:
+      name: since
+      in: query
+      schema:
+        type: string
+        format: date
+        example: "2025-01-01"
+    Until:
+      name: until
+      in: query
+      schema:
+        type: string
+        format: date
+        example: "2025-12-31"
+    Scenario:
+      name: scenario
+      in: query
+      schema:
+        type: string
+        maxLength: 200
+    Faction:
+      name: faction
+      in: query
+      schema:
+        type: string
+        maxLength: 200
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        status:
+          type: integer
+
+    StatsFilters:
+      type: object
+      properties:
+        ranked_only:
+          type: boolean
+        since:
+          type: string
+        until:
+          type: string
+        scenario:
+          type: string
+        faction:
+          type: string
+        min_games:
+          type: integer
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        last_ingestion:
+          type: string
+
+    FactionStat:
+      type: object
+      properties:
+        faction_slug:
+          type: string
+        base_faction:
+          type: string
+        display_name:
+          type: string
+        is_variant:
+          type: boolean
+        wins:
+          type: integer
+        losses:
+          type: integer
+        draws:
+          type: integer
+        total_games:
+          type: integer
+        win_rate:
+          type: number
+        pick_rate:
+          type: number
+        avg_warband_ducats:
+          type: integer
+
+    FactionStatsResponse:
+      type: object
+      properties:
+        generated_at:
+          type: string
+        filters:
+          $ref: "#/components/schemas/StatsFilters"
+        total_games:
+          type: integer
+        factions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactionStat"
+
+    UnitStat:
+      type: object
+      properties:
+        base_faction:
+          type: string
+        unit_id:
+          type: string
+        unit_name:
+          type: string
+        unit_type:
+          type: string
+        appearances:
+          type: integer
+        win_appearances:
+          type: integer
+        win_rate:
+          type: number
+        pick_pct:
+          type: number
+
+    UnitStatsResponse:
+      type: object
+      properties:
+        generated_at:
+          type: string
+        filters:
+          $ref: "#/components/schemas/StatsFilters"
+        units:
+          type: array
+          items:
+            $ref: "#/components/schemas/UnitStat"
+
+    EquipmentStat:
+      type: object
+      properties:
+        unit_id:
+          type: string
+        unit_name:
+          type: string
+        equipment_id:
+          type: string
+        equipment_name:
+          type: string
+        times_taken:
+          type: integer
+        times_won:
+          type: integer
+
+    EquipmentStatsResponse:
+      type: object
+      properties:
+        generated_at:
+          type: string
+        filters:
+          $ref: "#/components/schemas/StatsFilters"
+        equipment:
+          type: array
+          items:
+            $ref: "#/components/schemas/EquipmentStat"
+
+    ScenarioStat:
+      type: object
+      properties:
+        scenario_id:
+          type: string
+        base_faction:
+          type: string
+        wins:
+          type: integer
+        total:
+          type: integer
+        win_rate:
+          type: number
+
+    ScenarioStatsResponse:
+      type: object
+      properties:
+        generated_at:
+          type: string
+        filters:
+          $ref: "#/components/schemas/StatsFilters"
+        scenarios:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScenarioStat"
+
+    WarbandCostStat:
+      type: object
+      properties:
+        base_faction:
+          type: string
+        result:
+          type: string
+        avg_ducats:
+          type: integer
+        median_ducats:
+          type: integer
+        min_ducats:
+          type: integer
+        max_ducats:
+          type: integer
+
+    WarbandCostStatsResponse:
+      type: object
+      properties:
+        generated_at:
+          type: string
+        filters:
+          $ref: "#/components/schemas/StatsFilters"
+        costs:
+          type: array
+          items:
+            $ref: "#/components/schemas/WarbandCostStat"
+
+    DeedStat:
+      type: object
+      properties:
+        deed_id:
+          type: string
+        deed_name:
+          type: string
+        total_occurrences:
+          type: integer
+        attributed_occurrences:
+          type: integer
+        games_with_deed:
+          type: integer
+
+    DeedStatsResponse:
+      type: object
+      properties:
+        generated_at:
+          type: string
+        filters:
+          $ref: "#/components/schemas/StatsFilters"
+        deeds:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeedStat"
+
+    SummaryResponse:
+      type: object
+      properties:
+        total_games:
+          type: integer
+        ranked_games:
+          type: integer
+        unranked_games:
+          type: integer
+        earliest_game:
+          type: string
+        latest_game:
+          type: string
+        faction_count:
+          type: integer
+        last_updated:
+          type: string
+
+    MetaFaction:
+      type: object
+      properties:
+        faction_slug:
+          type: string
+        base_faction:
+          type: string
+        display_name:
+          type: string
+        is_variant:
+          type: boolean
+
+    MetaDateRange:
+      type: object
+      properties:
+        earliest:
+          type: string
+        latest:
+          type: string
+
+    MetaResponse:
+      type: object
+      properties:
+        factions:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetaFaction"
+        scenarios:
+          type: array
+          items:
+            type: string
+        date_range:
+          $ref: "#/components/schemas/MetaDateRange"
+
+    SyncStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        run_type:
+          type: string
+        started_at:
+          type: string
+        completed_at:
+          type: string
+          nullable: true
+        reports_found:
+          type: integer
+        reports_inserted:
+          type: integer
+        ids_scanned:
+          type: integer
+        errors:
+          type: integer
+
+paths:
+  /api/v1/health:
+    get:
+      tags: [health]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/stats/factions:
+    get:
+      tags: [stats]
+      summary: Faction win/pick rates
+      operationId: getFactionStats
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RankedOnly"
+        - $ref: "#/components/parameters/MinGames"
+        - $ref: "#/components/parameters/Since"
+        - $ref: "#/components/parameters/Until"
+        - $ref: "#/components/parameters/Scenario"
+        - $ref: "#/components/parameters/Faction"
+      responses:
+        "200":
+          description: Faction statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactionStatsResponse"
+        "400":
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/stats/units:
+    get:
+      tags: [stats]
+      summary: Unit appearance and win rates
+      operationId: getUnitStats
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RankedOnly"
+        - $ref: "#/components/parameters/MinGames"
+        - $ref: "#/components/parameters/Since"
+        - $ref: "#/components/parameters/Until"
+        - $ref: "#/components/parameters/Scenario"
+        - $ref: "#/components/parameters/Faction"
+      responses:
+        "200":
+          description: Unit statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnitStatsResponse"
+        "400":
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/stats/equipment:
+    get:
+      tags: [stats]
+      summary: Equipment usage stats
+      operationId: getEquipmentStats
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RankedOnly"
+        - $ref: "#/components/parameters/MinGames"
+        - $ref: "#/components/parameters/Since"
+        - $ref: "#/components/parameters/Until"
+        - $ref: "#/components/parameters/Scenario"
+        - $ref: "#/components/parameters/Faction"
+        - name: unit
+          in: query
+          description: Filter by unit ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Equipment statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EquipmentStatsResponse"
+        "400":
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/stats/scenarios:
+    get:
+      tags: [stats]
+      summary: Scenario win rates by faction
+      operationId: getScenarioStats
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RankedOnly"
+        - $ref: "#/components/parameters/MinGames"
+        - $ref: "#/components/parameters/Since"
+        - $ref: "#/components/parameters/Until"
+        - $ref: "#/components/parameters/Scenario"
+        - $ref: "#/components/parameters/Faction"
+      responses:
+        "200":
+          description: Scenario statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioStatsResponse"
+        "400":
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/stats/warband-costs:
+    get:
+      tags: [stats]
+      summary: Warband ducat distribution
+      operationId: getWarbandCostStats
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RankedOnly"
+        - $ref: "#/components/parameters/MinGames"
+        - $ref: "#/components/parameters/Since"
+        - $ref: "#/components/parameters/Until"
+        - $ref: "#/components/parameters/Scenario"
+        - $ref: "#/components/parameters/Faction"
+      responses:
+        "200":
+          description: Warband cost statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WarbandCostStatsResponse"
+        "400":
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/stats/deeds:
+    get:
+      tags: [stats]
+      summary: Deed frequency stats
+      operationId: getDeedStats
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RankedOnly"
+        - $ref: "#/components/parameters/MinGames"
+        - $ref: "#/components/parameters/Since"
+        - $ref: "#/components/parameters/Until"
+        - $ref: "#/components/parameters/Scenario"
+        - $ref: "#/components/parameters/Faction"
+      responses:
+        "200":
+          description: Deed statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeedStatsResponse"
+        "400":
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/stats/summary:
+    get:
+      tags: [stats]
+      summary: Overall game summary
+      operationId: getSummary
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Summary statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummaryResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/stats/meta:
+    get:
+      tags: [stats]
+      summary: Available factions, scenarios, and date range
+      operationId: getMeta
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Metadata for building queries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/sync/status:
+    get:
+      tags: [stats]
+      summary: Sync status (API key auth)
+      operationId: getSyncStatus
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Current sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatusResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/sync:
+    post:
+      tags: [admin]
+      summary: Trigger incremental sync
+      operationId: triggerSync
+      security:
+        - BasicAuth: []
+      responses:
+        "202":
+          description: Sync accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatusResponse"
+        "409":
+          description: Sync already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/sync/status:
+    get:
+      tags: [admin]
+      summary: Sync status (admin auth)
+      operationId: getAdminSyncStatus
+      security:
+        - BasicAuth: []
+      responses:
+        "200":
+          description: Current sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatusResponse"
+
+  /admin/logs:
+    get:
+      tags: [admin]
+      summary: Recent wide events
+      operationId: getAdminLogs
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: "n"
+          in: query
+          description: Number of events to return
+          schema:
+            type: integer
+            default: 100
+        - name: level
+          in: query
+          schema:
+            type: string
+        - name: path
+          in: query
+          schema:
+            type: string
+        - name: outcome
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Log events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      type: object

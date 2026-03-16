@@ -143,7 +143,7 @@ func TestStats_InvalidParam(t *testing.T) {
 
 func TestAdmin_RequiresBasicAuth(t *testing.T) {
 	ts, _ := testServer(t)
-	resp, err := http.Get(ts.URL + "/admin/sync/status")
+	resp, err := http.Post(ts.URL+"/admin/sync", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +155,8 @@ func TestAdmin_RequiresBasicAuth(t *testing.T) {
 
 func TestAdmin_SyncStatus_NoRuns(t *testing.T) {
 	ts, _ := testServer(t)
-	req, _ := http.NewRequest("GET", ts.URL+"/admin/sync/status", nil)
-	req.SetBasicAuth("admin", "pass")
+	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/sync/status", nil)
+	req.Header.Set("X-Api-Key", "test-key")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -352,8 +352,8 @@ func TestSyncStatus_WithCompletedRun(t *testing.T) {
 	db.CompleteIngestionRun(ctx, conn, runID, "completed", 5, 3, 10, 1, 1000, "test")
 	release()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/admin/sync/status", nil)
-	req.SetBasicAuth("admin", "pass")
+	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/sync/status", nil)
+	req.Header.Set("X-Api-Key", "test-key")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -473,7 +473,7 @@ func TestHandlers_500_OnClosedDB(t *testing.T) {
 		{"GET", "/api/v1/stats/summary", "api"},
 		{"GET", "/api/v1/stats/meta", "api"},
 		{"GET", "/api/v1/health", "none"},
-		{"GET", "/admin/sync/status", "basic"},
+		{"GET", "/api/v1/sync/status", "api"},
 	}
 
 	for _, ep := range endpoints {

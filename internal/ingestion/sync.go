@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/natalie-johanek/trench-analytics/internal/db"
+	"github.com/natalie-johanek/trench-analytics/internal/logging"
 	"github.com/natalie-johanek/trench-analytics/internal/models"
 )
 
@@ -108,6 +109,10 @@ func (s *Syncer) IncrementalSync(ctx context.Context) error {
 	}
 
 	start := maxID + 1
+	// If the DB is empty, start from a known-good range instead of 1.
+	if maxID == 0 {
+		start = 198400
+	}
 	runID, err := db.StartIngestionRun(ctx, conn, "incremental", &start, nil)
 	if err != nil {
 		return fmt.Errorf("starting ingestion run: %w", err)
@@ -154,10 +159,6 @@ func (s *Syncer) processID(ctx context.Context, conn *sql.Conn, id int, t *runTr
 		return true // found but failed to ingest
 	}
 	t.inserted++
-
-	if t.inserted%50 == 0 {
-		slog.Info("progress", "scanned", t.scanned, "found", t.found, "inserted", t.inserted)
-	}
 	return true
 }
 
@@ -226,7 +227,7 @@ func newRunTracker(runID int) *runTracker {
 	return &runTracker{runID: runID, startTime: time.Now()}
 }
 
-// finish writes the final ingestion stats using a background context (not the caller's).
+// finish writes the final ingestion stats using a background context and emits a wide event.
 func (t *runTracker) finish(conn *sql.Conn) {
 	ctx, cancel := db.BackgroundCtx(10 * time.Second)
 	defer cancel()
@@ -239,5 +240,21 @@ func (t *runTracker) finish(conn *sql.Conn) {
 	if err := db.CompleteIngestionRun(ctx, conn, t.runID, status, t.found, t.inserted, t.scanned, t.errors, ms, t.notes); err != nil {
 		slog.Error("failed to complete ingestion run", "err", err)
 	}
-	slog.Info("run complete", "status", status, "found", t.found, "inserted", t.inserted, "scanned", t.scanned, "errors", t.errors)
+
+	// Canonical log line for the entire ingestion run
+	event := logging.New(
+		"operation", "ingestion",
+		"run_id", t.runID,
+		"status", status,
+		"reports_found", t.found,
+		"reports_inserted", t.inserted,
+		"ids_scanned", t.scanned,
+		"errors", t.errors,
+		"notes", t.notes,
+	)
+	level := slog.LevelInfo
+	if status == "failed" {
+		level = slog.LevelError
+	}
+	event.Emit(level)
 }
