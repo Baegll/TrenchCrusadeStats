@@ -30,3 +30,27 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+# Go
+bin/
+*.exe
+coverage.out
+
+# DuckDB
+*.db
+*.db.wal
+/data/
+
+# templ generated
+*_templ.go
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

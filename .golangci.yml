@@ -1,0 +1,54 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    # Bugs
+    - errcheck          # unchecked errors
+    - govet             # go vet
+    - staticcheck       # comprehensive static analysis
+    - bodyclose         # unclosed HTTP response bodies
+    - sqlclosecheck     # unclosed sql.Rows/sql.Stmt
+
+    # Style
+    - goimports         # import ordering + formatting
+    - revive            # configurable replacement for golint
+    - misspell          # spelling in comments/strings
+    - unconvert         # unnecessary type conversions
+
+    # Performance
+    - prealloc          # slice preallocation hints
+    - ineffassign       # useless assignments
+
+    # Correctness
+    - unused            # unused code
+    - gosimple          # simplifications
+    - errorlint         # error wrapping best practices (errors.Is/As)
+    - nilerr            # returning nil when err is not nil
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        arguments: [checkPrivateReceivers]
+      - name: blank-imports
+      - name: context-as-argument
+      - name: error-return
+      - name: error-naming
+      - name: increment-decrement
+      - name: var-naming
+      - name: range
+      - name: receiver-naming
+      - name: indent-error-flow
+  errcheck:
+    check-blank: true
+  govet:
+    enable-all: true
+
+issues:
+  exclude-rules:
+    # Test files can have longer functions and unused params
+    - path: _test\.go
+      linters:
+        - errcheck
+        - revive
