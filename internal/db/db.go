@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,10 +24,22 @@ type DB struct {
 type Migrations map[int]string
 
 // Open creates a new DuckDB connection pool and runs pending migrations.
+// If the WAL file is corrupted, it attempts recovery by removing the WAL.
 func Open(ctx context.Context, path string, migrations Migrations) (*DB, error) {
 	pool, err := sql.Open("duckdb", path)
 	if err != nil {
-		return nil, fmt.Errorf("opening duckdb at %s: %w", path, err)
+		if strings.Contains(err.Error(), "Failure while replaying WAL") {
+			slog.Error("WAL corruption detected, attempting recovery", "path", path, "err", err)
+			walPath := path + ".wal"
+			if rmErr := os.Remove(walPath); rmErr != nil {
+				return nil, fmt.Errorf("failed to remove corrupted WAL %s: %w (original: %v)", walPath, rmErr, err)
+			}
+			slog.Info("removed corrupted WAL file, retrying open", "wal", walPath)
+			pool, err = sql.Open("duckdb", path)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("opening duckdb at %s: %w", path, err)
+		}
 	}
 
 	pool.SetMaxOpenConns(4)

@@ -104,6 +104,8 @@ func (sh *SyncHandlers) SyncStatus(w http.ResponseWriter, r *http.Request) {
 		scanned, total := sh.getProgress()
 		resp.IDsScanned = scanned
 		resp.TotalItems = total
+	} else {
+		resp.TotalItems = run.IDsScanned
 	}
 
 	// Previous completed run

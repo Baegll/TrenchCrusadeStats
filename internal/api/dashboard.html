@@ -77,13 +77,16 @@ async function pollSync(){
     const cls={completed:'ok',running:'warn',failed:'err',no_runs:'idle'}[d.status]||'idle';
     setEl('syncStatus',`<span class="${cls}">${d.status.toUpperCase()}</span>`);
 
-    // Progress bar
+    // Progress bar — show for running, completed, and failed
     const prog=document.getElementById('syncProgress');
-    if(d.status==='running'&&d.total_items>0){
+    const bar=document.getElementById('syncBar');
+    if(d.status!=='no_runs'&&d.ids_scanned>0){
       prog.style.display='block';
-      const pct=Math.min(100,(d.ids_scanned/d.total_items*100)).toFixed(1);
-      document.getElementById('syncBar').style.width=pct+'%';
-      setEl('syncProgressText',`${d.ids_scanned.toLocaleString()} / ${d.total_items.toLocaleString()} (${pct}%)`);
+      const total=d.total_items||d.ids_scanned;
+      const pct=Math.min(100,(d.ids_scanned/total*100)).toFixed(1);
+      bar.style.width=pct+'%';
+      bar.style.background=d.status==='failed'?'#f87171':d.status==='running'?'#facc15':'#4ade80';
+      setEl('syncProgressText',`${d.ids_scanned.toLocaleString()} / ${total.toLocaleString()} records (${pct}%)`);
     }else{prog.style.display='none'}
 
     // Current run timestamps
@@ -96,7 +99,7 @@ async function pollSync(){
 
     // Previous run timestamps
     let prev=[];
-    if(d.prev_started_at) prev.push('Last run: '+new Date(d.prev_started_at).toLocaleString());
+    if(d.prev_started_at) prev.push('Prev run: '+new Date(d.prev_started_at).toLocaleString());
     if(d.prev_completed_at) prev.push('→ '+new Date(d.prev_completed_at).toLocaleString());
     setEl('syncPrev',prev.join(' '));
   }catch(e){setEl('syncStatus','<span class="err">—</span>')}
