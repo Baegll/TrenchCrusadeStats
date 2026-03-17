@@ -161,7 +161,10 @@ type SyncStatusResponse struct {
 	ReportsFound    int     `json:"reports_found"`
 	ReportsInserted int     `json:"reports_inserted"`
 	IDsScanned      int     `json:"ids_scanned"`
+	TotalItems      int     `json:"total_items"`
 	Errors          int     `json:"errors"`
+	PrevStartedAt   *string `json:"prev_started_at,omitempty"`
+	PrevCompletedAt *string `json:"prev_completed_at,omitempty"`
 }
 
 // ErrorResponse is the standard error response shape for all API errors.

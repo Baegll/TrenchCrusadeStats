@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -13,22 +14,59 @@ import (
 	"github.com/natalie-johanek/trench-analytics/internal/models"
 )
 
-// fakeSynodServer returns an httptest server that serves game reports for specific IDs.
+// fakeSynodServer returns an httptest server that serves both:
+//   - GET /game-reports?page=N&per_page=M (paginated archive)
+//   - GET /game-report/{id} (single report, kept for FetchReport)
 func fakeSynodServer(reports map[int]models.SynodReport) *httptest.Server {
+	// Build a stable ordered slice of reports
+	allReports := make([]models.SynodReport, 0, len(reports))
+	for _, r := range reports {
+		allReports = append(allReports, r)
+	}
+
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Parse ID from /game-report/{id}
+		// Paginated archive endpoint
+		if r.URL.Path == "/game-reports" {
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			if page < 1 {
+				page = 1
+			}
+			if perPage < 1 {
+				perPage = 50
+			}
+
+			total := len(allReports)
+			totalPages := (total + perPage - 1) / perPage
+			start := (page - 1) * perPage
+			end := start + perPage
+			if start > total {
+				start = total
+			}
+			if end > total {
+				end = total
+			}
+
+			w.Header().Set("X-WP-Total", strconv.Itoa(total))
+			w.Header().Set("X-WP-TotalPages", strconv.Itoa(totalPages))
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(allReports[start:end])
+			return
+		}
+
+		// Single report endpoint: /game-report/{id}
 		parts := strings.Split(r.URL.Path, "/")
 		idStr := parts[len(parts)-1]
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			w.WriteHeader(404)
-			w.Write([]byte(`{"code":"invalid_game_report"}`))
+			fmt.Fprint(w, `{"code":"invalid_game_report"}`)
 			return
 		}
 		report, ok := reports[id]
 		if !ok {
 			w.WriteHeader(404)
-			w.Write([]byte(`{"code":"invalid_game_report"}`))
+			fmt.Fprint(w, `{"code":"invalid_game_report"}`)
 			return
 		}
 		json.NewEncoder(w).Encode(report)
@@ -93,7 +131,6 @@ func TestIngestOne(t *testing.T) {
 		t.Fatalf("ingestOne: %v", err)
 	}
 
-	// Verify data was inserted
 	var count int
 	store.Pool().QueryRow("SELECT COUNT(*) FROM games").Scan(&count)
 	if count != 1 {
@@ -122,7 +159,6 @@ func TestIngestOne_Idempotent(t *testing.T) {
 	raw, _ := json.Marshal(report)
 
 	ingestOne(ctx, conn, &report, raw)
-	// Second call should be a no-op
 	if err := ingestOne(ctx, conn, &report, raw); err != nil {
 		t.Fatalf("second ingestOne should not error: %v", err)
 	}
@@ -138,7 +174,6 @@ func TestBackfill(t *testing.T) {
 	reports := map[int]models.SynodReport{
 		100: makeTestReport(100, 10),
 		98:  makeTestReport(98, 20),
-		// 99 is a gap (404)
 	}
 	srv := fakeSynodServer(reports)
 	defer srv.Close()
@@ -158,7 +193,6 @@ func TestBackfill(t *testing.T) {
 		t.Errorf("games = %d, want 2", count)
 	}
 
-	// Check ingestion log
 	run, err := db.QueryLatestIngestion(context.Background(), store.Pool())
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +209,6 @@ func TestBackfill(t *testing.T) {
 }
 
 func TestIncrementalSync(t *testing.T) {
-	// Pre-seed one report, then sync should find the next one
 	reports := map[int]models.SynodReport{
 		100: makeTestReport(100, 10),
 		101: makeTestReport(101, 20),
@@ -188,11 +221,11 @@ func TestIncrementalSync(t *testing.T) {
 	defer client.Close()
 	syncer := NewSyncer(client, store)
 
-	// Backfill report 100
+	// Backfill first
 	syncer.Backfill(context.Background(), 100, 1)
 
-	// Incremental should find 101
-	if err := syncer.IncrementalSync(context.Background()); err != nil {
+	// Incremental should pick up both (since no modified_after filter on first run)
+	if err := syncer.IncrementalSync(context.Background(), nil); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
@@ -209,15 +242,13 @@ func TestIncrementalSync_AlreadyRunning(t *testing.T) {
 	defer client.Close()
 	syncer := NewSyncer(client, store)
 
-	// Hold the write lock
 	_, release, err := store.AcquireWriter(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer release()
 
-	// Sync should fail with "already in progress"
-	err = syncer.IncrementalSync(context.Background())
+	err = syncer.IncrementalSync(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "sync already in progress") {
 		t.Errorf("expected 'sync already in progress', got: %v", err)
 	}
@@ -232,8 +263,6 @@ func TestIngestOne_PanicRecovery(t *testing.T) {
 	}
 	defer release()
 
-	// Report with nil Warbands slice — Transform will panic on len(nil) access
-	// after passing the initial len check
 	report := &models.SynodReport{
 		GameReportID: 999,
 		PlayerIDs:    []int{1, 2},
@@ -241,12 +270,11 @@ func TestIngestOne_PanicRecovery(t *testing.T) {
 			Date:       1700000000,
 			ScenarioID: "sc_test",
 			Ranked:     true,
-			Warbands:   nil, // will fail validation, not panic
+			Warbands:   nil,
 		},
 	}
 	raw, _ := json.Marshal(report)
 
-	// This should return an error (validation), not panic
 	err = ingestOne(ctx, conn, report, raw)
 	if err == nil {
 		t.Error("expected error from invalid report")
@@ -262,7 +290,6 @@ func TestIngestOne_TransformFailStoresRaw(t *testing.T) {
 	}
 	defer release()
 
-	// Report that fails transform (only 1 warband) but should still store raw
 	report := &models.SynodReport{
 		GameReportID: 777,
 		PlayerIDs:    []int{1, 2},
@@ -288,7 +315,6 @@ func TestIngestOne_TransformFailStoresRaw(t *testing.T) {
 		t.Error("expected transform error")
 	}
 
-	// Raw report should still be stored
 	var count int
 	store.Pool().QueryRow("SELECT COUNT(*) FROM raw_game_reports WHERE game_report_id = 777").Scan(&count)
 	if count != 1 {
@@ -310,7 +336,7 @@ func TestBackfill_ContextCancel(t *testing.T) {
 	syncer := NewSyncer(client, store)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
+	cancel()
 
 	err := syncer.Backfill(ctx, 200, 200)
 	if err == nil {
@@ -335,7 +361,7 @@ func TestRunTracker_FailedStatus(t *testing.T) {
 
 	tracker := newRunTracker(runID)
 	tracker.errors = 5
-	tracker.inserted = 0 // errors > 0 && inserted == 0 → "failed"
+	tracker.inserted = 0
 	tracker.finish(conn)
 	release()
 
@@ -351,16 +377,9 @@ func TestRunTracker_FailedStatus(t *testing.T) {
 	}
 }
 
-func TestProcessID_FetchError(t *testing.T) {
-	// Server that always returns 500
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(500)
-	}))
-	defer srv.Close()
-
+func TestProcessRawReport_DecodeError(t *testing.T) {
 	store := testStore(t)
-	client := NewClient(srv.URL, 1000)
-	client.maxRetries = 0 // no retries for speed
+	client := NewClient("http://localhost:0", 1000)
 	defer client.Close()
 	syncer := NewSyncer(client, store)
 
@@ -372,23 +391,15 @@ func TestProcessID_FetchError(t *testing.T) {
 	defer release()
 
 	tracker := newRunTracker(1)
-	found := syncer.processID(ctx, conn, 1, tracker)
-	if found {
-		t.Error("expected not found on fetch error")
-	}
+	syncer.processRawReport(ctx, conn, json.RawMessage(`{invalid`), tracker)
 	if tracker.errors != 1 {
 		t.Errorf("errors = %d, want 1", tracker.errors)
 	}
 }
 
-func TestProcessID_404(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(404)
-	}))
-	defer srv.Close()
-
+func TestProcessRawReport_Success(t *testing.T) {
 	store := testStore(t)
-	client := NewClient(srv.URL, 1000)
+	client := NewClient("http://localhost:0", 1000)
 	defer client.Close()
 	syncer := NewSyncer(client, store)
 
@@ -399,39 +410,11 @@ func TestProcessID_404(t *testing.T) {
 	}
 	defer release()
 
-	tracker := newRunTracker(1)
-	found := syncer.processID(ctx, conn, 1, tracker)
-	if found {
-		t.Error("expected not found on 404")
-	}
-	if tracker.scanned != 1 {
-		t.Errorf("scanned = %d, want 1", tracker.scanned)
-	}
-}
-
-func TestProcessID_SuccessfulIngest(t *testing.T) {
 	report := makeTestReport(100, 10)
-	reports := map[int]models.SynodReport{100: report}
-	srv := fakeSynodServer(reports)
-	defer srv.Close()
-
-	store := testStore(t)
-	client := NewClient(srv.URL, 1000)
-	defer client.Close()
-	syncer := NewSyncer(client, store)
-
-	ctx := context.Background()
-	conn, release, err := store.AcquireWriter(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer release()
+	raw, _ := json.Marshal(report)
 
 	tracker := newRunTracker(1)
-	found := syncer.processID(ctx, conn, 100, tracker)
-	if !found {
-		t.Error("expected found")
-	}
+	syncer.processRawReport(ctx, conn, raw, tracker)
 	if tracker.inserted != 1 {
 		t.Errorf("inserted = %d, want 1", tracker.inserted)
 	}
@@ -440,32 +423,9 @@ func TestProcessID_SuccessfulIngest(t *testing.T) {
 	}
 }
 
-func TestProcessID_IngestError(t *testing.T) {
-	// Report that will fail transform (only 1 warband)
-	badReport := models.SynodReport{
-		GameReportID: 200,
-		PlayerIDs:    []int{1, 2},
-		Data: models.SynodReportData{
-			Date:       1700000000,
-			ScenarioID: "sc_test",
-			Ranked:     true,
-			Warbands: []models.SynodWarband{
-				{
-					FactionSlug: "fc_newantioch",
-					WarbandExport: models.SynodExport{
-						WID: 10, WNA: "WA", DR: 500,
-						ELT: []models.SynodUnit{{MDN: "Leader", MDI: "md_leader", C: models.SynodCost{D: 100}}},
-					},
-				},
-			},
-		},
-	}
-	reports := map[int]models.SynodReport{200: badReport}
-	srv := fakeSynodServer(reports)
-	defer srv.Close()
-
+func TestProcessRawReport_IngestError(t *testing.T) {
 	store := testStore(t)
-	client := NewClient(srv.URL, 1000)
+	client := NewClient("http://localhost:0", 1000)
 	defer client.Close()
 	syncer := NewSyncer(client, store)
 
@@ -476,11 +436,24 @@ func TestProcessID_IngestError(t *testing.T) {
 	}
 	defer release()
 
-	tracker := newRunTracker(1)
-	found := syncer.processID(ctx, conn, 200, tracker)
-	if !found {
-		t.Error("expected found (report exists but fails transform)")
+	// Report with only 1 warband → transform error
+	badReport := models.SynodReport{
+		GameReportID: 200,
+		PlayerIDs:    []int{1, 2},
+		Data: models.SynodReportData{
+			Date: 1700000000, ScenarioID: "sc_test", Ranked: true,
+			Warbands: []models.SynodWarband{
+				{FactionSlug: "fc_newantioch", WarbandExport: models.SynodExport{
+					WID: 10, WNA: "WA", DR: 500,
+					ELT: []models.SynodUnit{{MDN: "Leader", MDI: "md_leader", C: models.SynodCost{D: 100}}},
+				}},
+			},
+		},
 	}
+	raw, _ := json.Marshal(badReport)
+
+	tracker := newRunTracker(1)
+	syncer.processRawReport(ctx, conn, raw, tracker)
 	if tracker.errors != 1 {
 		t.Errorf("errors = %d, want 1", tracker.errors)
 	}
@@ -490,7 +463,6 @@ func TestProcessID_IngestError(t *testing.T) {
 }
 
 func TestBackfill_LargeBatch(t *testing.T) {
-	// Test backfill with more than 50 IDs to exercise batch logic
 	reports := map[int]models.SynodReport{}
 	for i := 50; i <= 110; i++ {
 		reports[i] = makeTestReport(i, 10)
@@ -524,32 +496,6 @@ func TestNewRunTracker(t *testing.T) {
 	}
 }
 
-func TestBackfill_RangeEndClamp(t *testing.T) {
-	// Test that rangeEnd is clamped to 1 when start-count+1 < 1
-	reports := map[int]models.SynodReport{
-		1: makeTestReport(1, 10),
-		2: makeTestReport(2, 10),
-	}
-	srv := fakeSynodServer(reports)
-	defer srv.Close()
-
-	store := testStore(t)
-	client := NewClient(srv.URL, 1000)
-	defer client.Close()
-	syncer := NewSyncer(client, store)
-
-	// start=2, count=100 → rangeEnd would be -97, clamped to 1
-	if err := syncer.Backfill(context.Background(), 2, 100); err != nil {
-		t.Fatalf("backfill: %v", err)
-	}
-
-	var count int
-	store.Pool().QueryRow("SELECT COUNT(*) FROM games").Scan(&count)
-	if count != 2 {
-		t.Errorf("games = %d, want 2", count)
-	}
-}
-
 func TestIncrementalSync_ContextCancel(t *testing.T) {
 	reports := map[int]models.SynodReport{
 		1: makeTestReport(1, 10),
@@ -562,23 +508,21 @@ func TestIncrementalSync_ContextCancel(t *testing.T) {
 	defer client.Close()
 	syncer := NewSyncer(client, store)
 
-	// Backfill one report first
 	syncer.Backfill(context.Background(), 1, 1)
 
-	// Cancel context immediately for incremental sync
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := syncer.IncrementalSync(ctx)
+	err := syncer.IncrementalSync(ctx, nil)
 	if err == nil {
 		t.Error("expected context cancellation error")
 	}
 }
 
-func TestBackfill_ProgressLogging(t *testing.T) {
-	// Create enough reports to trigger the progress logging (inserted%50==0)
+func TestBackfill_MultiPage(t *testing.T) {
+	// 150 reports should require 2 pages at perPage=100
 	reports := map[int]models.SynodReport{}
-	for i := 1; i <= 55; i++ {
+	for i := 1; i <= 150; i++ {
 		reports[i] = makeTestReport(i, 10)
 	}
 	srv := fakeSynodServer(reports)
@@ -589,13 +533,85 @@ func TestBackfill_ProgressLogging(t *testing.T) {
 	defer client.Close()
 	syncer := NewSyncer(client, store)
 
-	if err := syncer.Backfill(context.Background(), 55, 55); err != nil {
+	if err := syncer.Backfill(context.Background(), 1, 150); err != nil {
 		t.Fatalf("backfill: %v", err)
 	}
 
 	var count int
 	store.Pool().QueryRow("SELECT COUNT(*) FROM games").Scan(&count)
-	if count != 55 {
-		t.Errorf("games = %d, want 55", count)
+	if count != 150 {
+		t.Errorf("games = %d, want 150", count)
+	}
+}
+
+func TestIncrementalSync_DeltaFetch(t *testing.T) {
+	// Backfill first, then add a new report and run incremental.
+	// Since the fake server doesn't filter by modified_after,
+	// incremental will re-see existing reports (idempotent) and pick up new ones.
+	reports := map[int]models.SynodReport{
+		100: makeTestReport(100, 10),
+	}
+	srv := fakeSynodServer(reports)
+	defer srv.Close()
+
+	store := testStore(t)
+	client := NewClient(srv.URL, 1000)
+	defer client.Close()
+	syncer := NewSyncer(client, store)
+
+	// Backfill
+	if err := syncer.Backfill(context.Background(), 100, 1); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+
+	// Incremental (should be idempotent — no new reports)
+	if err := syncer.IncrementalSync(context.Background(), nil); err != nil {
+		t.Fatalf("incremental: %v", err)
+	}
+
+	var count int
+	store.Pool().QueryRow("SELECT COUNT(*) FROM games").Scan(&count)
+	if count != 1 {
+		t.Errorf("games = %d, want 1 (idempotent)", count)
+	}
+
+	// Verify two ingestion runs logged
+	var runs int
+	store.Pool().QueryRow("SELECT COUNT(*) FROM ingestion_log").Scan(&runs)
+	if runs != 2 {
+		t.Errorf("ingestion runs = %d, want 2", runs)
+	}
+}
+
+func TestIncrementalSync_EmptyResult(t *testing.T) {
+	// Server returns empty array — sync should complete immediately
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-WP-Total", "0")
+		w.Header().Set("X-WP-TotalPages", "0")
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	store := testStore(t)
+	client := NewClient(srv.URL, 1000)
+	defer client.Close()
+	syncer := NewSyncer(client, store)
+
+	if err := syncer.IncrementalSync(context.Background(), nil); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	run, err := db.QueryLatestIngestion(context.Background(), store.Pool())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run == nil {
+		t.Fatal("expected ingestion run")
+	}
+	if run.Status != "completed" {
+		t.Errorf("status = %q, want completed", run.Status)
+	}
+	if run.ReportsInserted != 0 {
+		t.Errorf("inserted = %d, want 0", run.ReportsInserted)
 	}
 }

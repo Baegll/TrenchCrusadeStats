@@ -35,7 +35,7 @@ th{color:#888;text-transform:uppercase;font-size:.75rem}
 
 <div class="grid">
 <div class="card"><h2>Health</h2><div class="val" id="health">—</div><div id="lastIngestion" style="font-size:.75rem;color:#888;margin-top:.3rem"></div></div>
-<div class="card"><h2>Sync Status</h2><div class="val" id="syncStatus">—</div><div id="syncDetail" style="font-size:.75rem;color:#888;margin-top:.3rem"></div></div>
+<div class="card"><h2>Sync Status</h2><div class="val" id="syncStatus">—</div><div id="syncProgress" style="margin-top:.5rem;display:none"><div class="bar" style="height:10px"><div class="bar-fill" id="syncBar" style="width:0%"></div></div><div style="font-size:.75rem;color:#888;margin-top:.3rem" id="syncProgressText"></div></div><div id="syncDetail" style="font-size:.75rem;color:#888;margin-top:.3rem"></div><div id="syncPrev" style="font-size:.75rem;color:#666;margin-top:.3rem"></div></div>
 <div class="card"><h2>Total Games</h2><div class="val" id="totalGames">—</div></div>
 <div class="card"><h2>Ranked / Unranked</h2><div class="val" id="rankedSplit">—</div></div>
 </div>
@@ -76,11 +76,29 @@ async function pollSync(){
     const d=await fetchJSON('/api/v1/sync/status',{headers:hdr()});
     const cls={completed:'ok',running:'warn',failed:'err',no_runs:'idle'}[d.status]||'idle';
     setEl('syncStatus',`<span class="${cls}">${d.status.toUpperCase()}</span>`);
+
+    // Progress bar
+    const prog=document.getElementById('syncProgress');
+    if(d.status==='running'&&d.total_items>0){
+      prog.style.display='block';
+      const pct=Math.min(100,(d.ids_scanned/d.total_items*100)).toFixed(1);
+      document.getElementById('syncBar').style.width=pct+'%';
+      setEl('syncProgressText',`${d.ids_scanned.toLocaleString()} / ${d.total_items.toLocaleString()} (${pct}%)`);
+    }else{prog.style.display='none'}
+
+    // Current run timestamps
     let detail=[];
     if(d.started_at) detail.push('Started: '+new Date(d.started_at).toLocaleString());
+    if(d.completed_at) detail.push('Finished: '+new Date(d.completed_at).toLocaleString());
     if(d.reports_inserted) detail.push('Inserted: '+d.reports_inserted);
     if(d.errors) detail.push('Errors: '+d.errors);
     setEl('syncDetail',detail.join(' · '));
+
+    // Previous run timestamps
+    let prev=[];
+    if(d.prev_started_at) prev.push('Last run: '+new Date(d.prev_started_at).toLocaleString());
+    if(d.prev_completed_at) prev.push('→ '+new Date(d.prev_completed_at).toLocaleString());
+    setEl('syncPrev',prev.join(' '));
   }catch(e){setEl('syncStatus','<span class="err">—</span>')}
 }
 

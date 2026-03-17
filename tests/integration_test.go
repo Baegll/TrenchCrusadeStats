@@ -39,7 +39,41 @@ type testEnv struct {
 func setupEnv(t *testing.T, reports map[int]models.SynodReport) *testEnv {
 	t.Helper()
 
+	// Build ordered slice for paginated endpoint
+	allReports := make([]models.SynodReport, 0, len(reports))
+	for _, r := range reports {
+		allReports = append(allReports, r)
+	}
+
 	synod := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Paginated archive endpoint
+		if r.URL.Path == "/game-reports" {
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			if page < 1 {
+				page = 1
+			}
+			if perPage < 1 {
+				perPage = 50
+			}
+			total := len(allReports)
+			totalPages := (total + perPage - 1) / perPage
+			start := (page - 1) * perPage
+			end := start + perPage
+			if start > total {
+				start = total
+			}
+			if end > total {
+				end = total
+			}
+			w.Header().Set("X-WP-Total", strconv.Itoa(total))
+			w.Header().Set("X-WP-TotalPages", strconv.Itoa(totalPages))
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(allReports[start:end])
+			return
+		}
+
+		// Single report endpoint
 		parts := strings.Split(r.URL.Path, "/")
 		idStr := parts[len(parts)-1]
 		id, err := strconv.Atoi(idStr)

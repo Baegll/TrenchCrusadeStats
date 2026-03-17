@@ -59,7 +59,7 @@ func runServe(ctx context.Context) error {
 
 	client := ingestion.NewClient(
 		envOrDefault("TC_BASE_URL", "https://synod.trench-companion.com/wp-json/synod/v1"),
-		envIntOrDefault("TC_RATE_LIMIT", 5),
+		envIntOrDefault("TC_RATE_LIMIT", 2),
 	)
 	defer client.Close()
 
@@ -121,7 +121,7 @@ func runBackfill(ctx context.Context) error {
 
 	client := ingestion.NewClient(
 		envOrDefault("TC_BASE_URL", "https://synod.trench-companion.com/wp-json/synod/v1"),
-		envIntOrDefault("TC_RATE_LIMIT", 5),
+		envIntOrDefault("TC_RATE_LIMIT", 2),
 	)
 	defer client.Close()
 
@@ -137,11 +137,11 @@ func runSync(ctx context.Context) error {
 
 	client := ingestion.NewClient(
 		envOrDefault("TC_BASE_URL", "https://synod.trench-companion.com/wp-json/synod/v1"),
-		envIntOrDefault("TC_RATE_LIMIT", 5),
+		envIntOrDefault("TC_RATE_LIMIT", 2),
 	)
 	defer client.Close()
 
-	return ingestion.NewSyncer(client, store).IncrementalSync(ctx)
+	return ingestion.NewSyncer(client, store).IncrementalSync(ctx, nil)
 }
 
 func parseBackfillArgs() (start, count int, err error) {

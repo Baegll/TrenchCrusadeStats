@@ -13,6 +13,8 @@ import (
 	"github.com/natalie-johanek/trench-analytics/internal/models"
 )
 
+const perPage = 100
+
 // Syncer orchestrates ingestion runs (backfill and incremental).
 type Syncer struct {
 	client *Client
@@ -24,20 +26,13 @@ func NewSyncer(client *Client, store *db.DB) *Syncer {
 	return &Syncer{client: client, store: store}
 }
 
-// Backfill scans IDs downward from start for count IDs.
-// Releases the write lock between batches of 50 to avoid blocking syncs.
+// Backfill fetches all reports using the paginated archive endpoint.
 func (s *Syncer) Backfill(ctx context.Context, start, count int) error {
-	rangeEnd := start - count + 1
-	if rangeEnd < 1 {
-		rangeEnd = 1
-	}
-
-	// Start ingestion log entry
 	conn, release, err := s.store.AcquireWriter(ctx)
 	if err != nil {
 		return fmt.Errorf("acquiring writer: %w", err)
 	}
-	runID, err := db.StartIngestionRun(ctx, conn, "backfill", &rangeEnd, &start)
+	runID, err := db.StartIngestionRun(ctx, conn, "backfill", &start, &count)
 	release()
 	if err != nil {
 		return fmt.Errorf("starting ingestion run: %w", err)
@@ -56,44 +51,45 @@ func (s *Syncer) Backfill(ctx context.Context, start, count int) error {
 		tracker.finish(conn)
 	}()
 
-	batchSize := 50
-	for batchStart := start; batchStart >= rangeEnd; batchStart -= batchSize {
+	for page := 1; ; page++ {
 		if ctx.Err() != nil {
 			tracker.notes = "cancelled"
 			return ctx.Err()
 		}
 
-		batchEnd := batchStart - batchSize + 1
-		if batchEnd < rangeEnd {
-			batchEnd = rangeEnd
+		result, err := s.client.FetchReportsPage(ctx, page, perPage, nil)
+		if err != nil {
+			return fmt.Errorf("fetching page %d: %w", page, err)
 		}
 
 		conn, release, err := s.store.AcquireWriter(ctx)
 		if err != nil {
-			return fmt.Errorf("acquiring writer for batch: %w", err)
+			return fmt.Errorf("acquiring writer for page %d: %w", page, err)
 		}
 
-		for id := batchStart; id >= batchEnd; id-- {
-			if ctx.Err() != nil {
-				release()
-				tracker.notes = "cancelled"
-				return ctx.Err()
-			}
-			s.processID(ctx, conn, id, tracker)
+		for _, rawJSON := range result.Reports {
+			tracker.scanned++
+			s.processRawReport(ctx, conn, rawJSON, tracker)
 		}
 
 		release()
 
-		if tracker.inserted > 0 && tracker.inserted%200 == 0 {
-			slog.Info("backfill progress", "scanned", tracker.scanned, "found", tracker.found, "inserted", tracker.inserted)
+		slog.Info("backfill progress",
+			"page", page, "total_pages", result.TotalPages,
+			"found", tracker.found, "inserted", tracker.inserted)
+
+		if page >= result.TotalPages {
+			break
 		}
 	}
 	return nil
 }
 
-// IncrementalSync scans upward from the highest known ID.
-// Returns an error containing "sync already in progress" if the write lock is held.
-func (s *Syncer) IncrementalSync(ctx context.Context) error {
+// ProgressFunc is called with (scanned, totalItems) during sync.
+type ProgressFunc func(scanned, total int)
+
+// IncrementalSync fetches only reports modified since the last completed sync.
+func (s *Syncer) IncrementalSync(ctx context.Context, onProgress ProgressFunc) error {
 	conn, release, locked, err := s.store.TryAcquireWriter(ctx)
 	if err != nil {
 		return fmt.Errorf("acquiring writer: %w", err)
@@ -101,65 +97,109 @@ func (s *Syncer) IncrementalSync(ctx context.Context) error {
 	if !locked {
 		return fmt.Errorf("sync already in progress")
 	}
-	defer release()
 
-	maxID, err := db.MaxGameReportID(ctx, conn)
+	// Determine modified_after from last completed run
+	modifiedAfter, err := db.LastCompletedRunTime(ctx, conn)
 	if err != nil {
-		return fmt.Errorf("getting max ID: %w", err)
+		release()
+		return fmt.Errorf("getting last run time: %w", err)
 	}
 
-	start := maxID + 1
-	// If the DB is empty, start from a known-good range instead of 1.
-	if maxID == 0 {
-		start = 198400
-	}
-	runID, err := db.StartIngestionRun(ctx, conn, "incremental", &start, nil)
+	runID, err := db.StartIngestionRun(ctx, conn, "incremental", nil, nil)
 	if err != nil {
+		release()
 		return fmt.Errorf("starting ingestion run: %w", err)
 	}
+	release()
 
 	tracker := newRunTracker(runID)
-	defer tracker.finish(conn)
+	defer func() {
+		bgCtx, cancel := db.BackgroundCtx(10 * time.Second)
+		defer cancel()
+		conn, release, err := s.store.AcquireWriter(bgCtx)
+		if err != nil {
+			slog.Error("failed to acquire writer for sync finish", "err", err)
+			return
+		}
+		defer release()
+		tracker.finish(conn)
+	}()
 
-	consecutive404s := 0
-	for id := start; consecutive404s < 500; id++ {
+	for page := 1; ; page++ {
 		if ctx.Err() != nil {
 			tracker.notes = "cancelled"
 			return ctx.Err()
 		}
 
-		wasFound := s.processID(ctx, conn, id, tracker)
-		if wasFound {
-			consecutive404s = 0
-		} else {
-			consecutive404s++
+		result, err := s.client.FetchReportsPage(ctx, page, perPage, modifiedAfter)
+		if err != nil {
+			return fmt.Errorf("fetching page %d: %w", page, err)
+		}
+
+		if len(result.Reports) == 0 {
+			break
+		}
+
+		conn, release, err := s.store.AcquireWriter(ctx)
+		if err != nil {
+			return fmt.Errorf("acquiring writer for page %d: %w", page, err)
+		}
+
+		for _, rawJSON := range result.Reports {
+			tracker.scanned++
+			s.processRawReport(ctx, conn, rawJSON, tracker)
+		}
+
+		release()
+
+		slog.Info("incremental sync progress",
+			"page", page, "total_pages", result.TotalPages,
+			"total_items", result.TotalItems,
+			"found", tracker.found, "inserted", tracker.inserted)
+
+		if onProgress != nil {
+			onProgress(tracker.scanned, result.TotalItems)
+		}
+
+		if page >= result.TotalPages {
+			break
 		}
 	}
 	return nil
 }
 
-// processID fetches, transforms, and inserts a single ID. Returns true if a report was found.
-func (s *Syncer) processID(ctx context.Context, conn *sql.Conn, id int, t *runTracker) bool {
-	t.scanned++
+// paginatedReport is the wrapper shape returned by the paginated archive endpoint.
+type paginatedReport struct {
+	ReportData models.SynodReport `json:"report_data"`
+}
 
-	report, rawJSON, err := s.client.FetchReport(ctx, id)
-	if err != nil {
-		slog.Warn("fetch error", "id", id, "err", err)
+// processRawReport unmarshals, transforms, and inserts a single report from raw JSON.
+// Handles both the paginated wrapper shape (report_data) and the direct single-report shape.
+func (s *Syncer) processRawReport(ctx context.Context, conn *sql.Conn, rawJSON json.RawMessage, t *runTracker) {
+	var wrapper paginatedReport
+	if err := json.Unmarshal(rawJSON, &wrapper); err != nil {
+		slog.Warn("decode error", "err", err)
 		t.errors++
-		return false
+		return
 	}
-	if report == nil {
-		return false // 404
+
+	report := &wrapper.ReportData
+	if report.GameReportID == 0 {
+		// Fall back to direct shape (single-report endpoint)
+		if err := json.Unmarshal(rawJSON, report); err != nil {
+			slog.Warn("decode error", "err", err)
+			t.errors++
+			return
+		}
 	}
 
 	t.found++
 	if err := ingestOne(ctx, conn, report, rawJSON); err != nil {
-		slog.Warn("ingest error", "id", id, "err", err)
+		slog.Warn("ingest error", "id", report.GameReportID, "err", err)
 		t.errors++
-		return true // found but failed to ingest
+		return
 	}
 	t.inserted++
-	return true
 }
 
 // ingestOne transforms and inserts a single report inside a transaction with panic recovery.
@@ -170,24 +210,21 @@ func ingestOne(ctx context.Context, conn *sql.Conn, report *models.SynodReport, 
 		}
 	}()
 
-	// Transform first (before any DB writes) — fail fast on bad data
 	result, err := Transform(report)
 	if err != nil {
-		// Store raw even if transform fails (for debugging), but outside transaction
 		if _, insertErr := db.InsertRawReport(ctx, conn, report.GameReportID, rawJSON); insertErr != nil {
 			slog.Warn("failed to store raw report for failed transform", "id", report.GameReportID, "err", insertErr)
 		}
 		return fmt.Errorf("transform report %d: %w", report.GameReportID, err)
 	}
 
-	// Insert everything in a single transaction — all or nothing
 	return db.ExecTx(ctx, conn, func(tx *sql.Tx) error {
 		isNew, err := db.InsertRawReport(ctx, tx, report.GameReportID, rawJSON)
 		if err != nil {
 			return err
 		}
 		if !isNew {
-			return nil // already fully ingested
+			return nil
 		}
 
 		if err := db.InsertGame(ctx, tx, result.Game); err != nil {
@@ -227,7 +264,7 @@ func newRunTracker(runID int) *runTracker {
 	return &runTracker{runID: runID, startTime: time.Now()}
 }
 
-// finish writes the final ingestion stats using a background context and emits a wide event.
+// finish writes the final ingestion stats and emits a wide event.
 func (t *runTracker) finish(conn *sql.Conn) {
 	ctx, cancel := db.BackgroundCtx(10 * time.Second)
 	defer cancel()
@@ -241,7 +278,6 @@ func (t *runTracker) finish(conn *sql.Conn) {
 		slog.Error("failed to complete ingestion run", "err", err)
 	}
 
-	// Canonical log line for the entire ingestion run
 	event := logging.New(
 		"operation", "ingestion",
 		"run_id", t.runID,

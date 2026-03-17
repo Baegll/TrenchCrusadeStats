@@ -98,6 +98,22 @@ func MaxGameReportID(ctx context.Context, ex Executor) (int, error) {
 	return id, err
 }
 
+// LastCompletedRunTime returns the run_at time of the most recent completed ingestion run.
+// Returns nil if no completed runs exist (triggers a full sync).
+func LastCompletedRunTime(ctx context.Context, ex Executor) (*time.Time, error) {
+	var t sql.NullTime
+	err := ex.QueryRowContext(ctx,
+		`SELECT run_at FROM ingestion_log WHERE status = 'completed' ORDER BY run_at DESC LIMIT 1`,
+	).Scan(&t)
+	if err == sql.ErrNoRows || !t.Valid {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying last completed run: %w", err)
+	}
+	return &t.Time, nil
+}
+
 // StartIngestionRun creates a new ingestion_log entry and returns its ID.
 func StartIngestionRun(ctx context.Context, ex Executor, runType string, rangeStart, rangeEnd *int) (int, error) {
 	var id int
@@ -510,6 +526,34 @@ func QueryLatestIngestion(ctx context.Context, pool *sql.DB) (*models.IngestionR
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying latest ingestion: %w", err)
+	}
+	if runAt.Valid {
+		r.RunAt = runAt.Time
+	}
+	if completedAt.Valid {
+		r.CompletedAt = &completedAt.Time
+	}
+	return &r, nil
+}
+
+// QueryPreviousCompletedRun returns the most recent completed run before the given run ID.
+func QueryPreviousCompletedRun(ctx context.Context, pool *sql.DB, currentID int) (*models.IngestionRun, error) {
+	var r models.IngestionRun
+	var runAt, completedAt sql.NullTime
+
+	err := pool.QueryRowContext(ctx, `
+		SELECT id, run_at, completed_at, status, run_type,
+		       reports_found, reports_inserted, ids_scanned, errors
+		FROM ingestion_log
+		WHERE id < $1 AND status = 'completed'
+		ORDER BY run_at DESC LIMIT 1
+	`, currentID).Scan(&r.ID, &runAt, &completedAt, &r.Status, &r.RunType,
+		&r.ReportsFound, &r.ReportsInserted, &r.IDsScanned, &r.Errors)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying previous completed run: %w", err)
 	}
 	if runAt.Valid {
 		r.RunAt = runAt.Time

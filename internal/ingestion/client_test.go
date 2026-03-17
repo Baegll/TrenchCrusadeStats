@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/natalie-johanek/trench-analytics/internal/models"
 )
@@ -224,5 +226,133 @@ func TestTransform_RealReport(t *testing.T) {
 				maxIdx = u.RowIndex
 			}
 		}
+	}
+}
+
+func TestFetchReportsPage_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/game-reports" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("page") != "1" || r.URL.Query().Get("per_page") != "50" {
+			t.Errorf("unexpected params: %s", r.URL.RawQuery)
+		}
+		w.Header().Set("X-WP-Total", "120")
+		w.Header().Set("X-WP-TotalPages", "3")
+		w.Write([]byte(`[{"game_report_id":1},{"game_report_id":2}]`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, 100)
+	defer c.Close()
+
+	result, err := c.FetchReportsPage(context.Background(), 1, 50, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Reports) != 2 {
+		t.Errorf("reports = %d, want 2", len(result.Reports))
+	}
+	if result.TotalItems != 120 {
+		t.Errorf("total = %d, want 120", result.TotalItems)
+	}
+	if result.TotalPages != 3 {
+		t.Errorf("pages = %d, want 3", result.TotalPages)
+	}
+}
+
+func TestFetchReportsPage_ModifiedAfter(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("X-WP-Total", "0")
+		w.Header().Set("X-WP-TotalPages", "0")
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, 100)
+	defer c.Close()
+
+	ts := time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC)
+	_, err := c.FetchReportsPage(context.Background(), 1, 100, &ts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotQuery, "modified_after=") {
+		t.Errorf("expected modified_after param, got: %s", gotQuery)
+	}
+}
+
+func TestFetchReportsPage_RetryOn500(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls <= 2 {
+			w.WriteHeader(500)
+			return
+		}
+		w.Header().Set("X-WP-Total", "1")
+		w.Header().Set("X-WP-TotalPages", "1")
+		w.Write([]byte(`[{"game_report_id":1}]`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, 100)
+	defer c.Close()
+
+	result, err := c.FetchReportsPage(context.Background(), 1, 100, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Reports) != 1 {
+		t.Errorf("reports = %d, want 1", len(result.Reports))
+	}
+	if calls != 3 {
+		t.Errorf("calls = %d, want 3", calls)
+	}
+}
+
+func TestFetchReportsPage_AllRetriesExhausted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, 100)
+	c.maxRetries = 1
+	defer c.Close()
+
+	_, err := c.FetchReportsPage(context.Background(), 1, 100, nil)
+	if err == nil {
+		t.Error("expected error after retries exhausted")
+	}
+}
+
+func TestFetchReportsPage_UnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, 100)
+	defer c.Close()
+
+	_, err := c.FetchReportsPage(context.Background(), 1, 100, nil)
+	if err == nil {
+		t.Error("expected error for 403")
+	}
+}
+
+func TestFetchReportsPage_ContextCancel(t *testing.T) {
+	c := NewClient("http://localhost:0", 100)
+	defer c.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := c.FetchReportsPage(ctx, 1, 100, nil)
+	if err == nil {
+		t.Error("expected error from cancelled context")
 	}
 }

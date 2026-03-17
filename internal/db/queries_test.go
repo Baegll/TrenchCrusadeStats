@@ -362,6 +362,79 @@ func TestMaxGameReportID_Empty(t *testing.T) {
 	}
 }
 
+func TestLastCompletedRunTime_Empty(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+	conn, release, err := d.AcquireWriter(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	ts, err := LastCompletedRunTime(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ts != nil {
+		t.Errorf("expected nil, got %v", ts)
+	}
+}
+
+func TestLastCompletedRunTime_WithData(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+	conn, release, err := d.AcquireWriter(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	start := 1
+	runID, err := StartIngestionRun(ctx, conn, "backfill", &start, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := CompleteIngestionRun(ctx, conn, runID, "completed", 5, 3, 10, 0, 1000, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	ts, err := LastCompletedRunTime(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ts == nil {
+		t.Fatal("expected non-nil timestamp")
+	}
+	if ts.IsZero() {
+		t.Error("expected non-zero timestamp")
+	}
+}
+
+func TestLastCompletedRunTime_IgnoresRunning(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+	conn, release, err := d.AcquireWriter(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	// Start a run but don't complete it
+	start := 1
+	_, err = StartIngestionRun(ctx, conn, "incremental", &start, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ts, err := LastCompletedRunTime(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ts != nil {
+		t.Errorf("expected nil for running-only runs, got %v", ts)
+	}
+}
+
 func TestAcquireWriter_TryAcquire(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()

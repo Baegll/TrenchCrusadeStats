@@ -59,13 +59,13 @@ TrenchCompanionStats/
 
 | Package | Coverage | Tests | Type |
 |---|---|---|---|
-| `cmd/analytics` | 91.7% | 27 | Unit |
-| `internal/api` | 99.2% | 38 | Unit + integration |
-| `internal/db` | 83.1% | 44 | Integration (in-memory DuckDB) |
-| `internal/ingestion` | 86.0% | 35 | Unit + integration |
+| `cmd/analytics` | 84.9% | 27 | Unit |
+| `internal/api` | 88.3% | 38 | Unit + integration |
+| `internal/db` | 83.1% | 47 | Integration (in-memory DuckDB) |
+| `internal/ingestion` | 79.0% | 41 | Unit + integration |
 | `internal/models` | 100.0% | 2 | Unit |
 | `tests/` | — | 5 | E2E |
-| **Total** | **89.8%** | **151** | **All passing, no races** |
+| **Total** | **86.4%** | **160** | **All passing, no races** |
 
 ---
 
@@ -81,11 +81,11 @@ TrenchCompanionStats/
 
 ### 3. Synod Client — `internal/ingestion/client_test.go`
 
-8 tests using httptest: success, 404, retry on 500, context cancellation, User-Agent header, unexpected status code, all retries exhausted, context cancel during retry.
+14 tests using httptest. `FetchReport`: success, 404, retry on 500, context cancellation, User-Agent header, unexpected status code, all retries exhausted, context cancel during retry. `FetchReportsPage`: success with pagination headers, `modified_after` parameter encoding, retry on 500, all retries exhausted, unexpected status, context cancel.
 
 ### 4. Sync Orchestrator — `internal/ingestion/sync_test.go`
 
-17 tests using fake Synod server + in-memory DuckDB: ingestOne, idempotency, backfill with gaps, incremental sync, lock contention, invalid report handling, transform-fail-stores-raw, context cancellation, failed status tracker, processID (404/success/ingest error/fetch error), large batch backfill, rangeEnd clamping, incremental sync context cancel, progress logging.
+20 tests using fake Synod server (paginated + single-report endpoints) + in-memory DuckDB: ingestOne, idempotency, backfill via paginated archive, multi-page backfill, incremental sync with delta fetch, delta fetch idempotency, empty result sync, lock contention, invalid report handling, transform-fail-stores-raw, context cancellation, failed status tracker, processRawReport (decode error/success/ingest error), large batch backfill, incremental sync context cancel.
 
 ### 5. DB Queries — `internal/db/queries_test.go`
 
@@ -159,6 +159,20 @@ When adding a new feature, follow this checklist:
 
 ---
 
+## Remaining Coverage Gaps
+
+These are uncovered paths in the paginated sync code that require simulating infrastructure failures:
+
+| Gap | Package | Why |
+|---|---|---|
+| `Backfill`/`IncrementalSync` deferred cleanup — "failed to acquire writer for finish" | `ingestion/sync` | Requires DB failure during deferred cleanup |
+| `FetchReportsPage` — retry backoff context cancel mid-sleep | `ingestion/client` | Requires precise timing to cancel during backoff |
+| `LastCompletedRunTime` — DB query error (non-ErrNoRows) | `db/queries` | Requires driver-level failure |
+
+These fall into the same category as the pre-existing intentionally uncovered code below — defensive error handling for infrastructure failures.
+
+---
+
 ## Intentionally Uncovered Code
 
 | Function | Why | Coverage Impact |
@@ -173,7 +187,7 @@ When adding a new feature, follow this checklist:
 
 ### Coverage ceiling
 
-Realistic maximum: **90–92%**. The remaining ~10% is defensive error handling
+Current: **86.4%**. Realistic maximum: **90–92%**. The remaining ~10% is defensive error handling
 for infrastructure failures (DB driver errors, TCP read failures, JSON encoding
 of valid structs) that cannot be triggered without mocking at the driver level.
 This is the correct trade-off — the code handles these errors properly, and
