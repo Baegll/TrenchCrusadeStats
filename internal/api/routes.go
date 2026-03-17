@@ -27,6 +27,7 @@ func (s *Server) Close() {
 // NewServer creates the Chi router with all routes registered.
 func NewServer(store *db.DB, syncer *ingestion.Syncer, apiKey, adminUser, adminPass string, rateLimitPerMin int) *Server {
 	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
 	r.Use(WideEventMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RealIP)

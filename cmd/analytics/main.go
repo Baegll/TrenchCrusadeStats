@@ -16,14 +16,32 @@ import (
 	"github.com/natalie-johanek/trench-analytics/internal/api"
 	"github.com/natalie-johanek/trench-analytics/internal/db"
 	"github.com/natalie-johanek/trench-analytics/internal/ingestion"
+	"github.com/natalie-johanek/trench-analytics/internal/logging"
 )
 
 func migrations() db.Migrations {
 	return db.Migrations{1: db.Migration001}
 }
 
+// Version is set at build time via -ldflags.
+var Version = "dev"
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	// Log environment context once at startup (Fly sets these automatically)
+	slog.Info("starting",
+		"version", Version,
+		"region", os.Getenv("FLY_REGION"),
+		"instance", os.Getenv("FLY_ALLOC_ID"),
+	)
+
+	// Attach environment fields to every wide event
+	logging.SetEnvFields(
+		"version", Version,
+		"region", os.Getenv("FLY_REGION"),
+		"instance", os.Getenv("FLY_ALLOC_ID"),
+	)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()

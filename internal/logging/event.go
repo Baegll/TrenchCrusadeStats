@@ -1,13 +1,23 @@
 // Package logging implements the wide event / canonical log line pattern.
 // Instead of scattered log statements, each request or operation builds
 // a single structured event with all context, emitted once at completion.
+//
+// The ring buffer uses tail sampling: errors, warnings, and slow requests
+// are always kept; successful fast requests are sampled at a configurable rate.
 package logging
 
 import (
 	"context"
 	"log/slog"
+	"math/rand/v2"
 	"sync"
 	"time"
+)
+
+// Default tail sampling config.
+const (
+	DefaultSampleRate   = 0.05 // 5% of normal success events
+	DefaultSlowThreshMs = 500  // requests slower than this are always kept
 )
 
 type ctxKey struct{}
@@ -20,27 +30,62 @@ type Event struct {
 }
 
 // Buffer is a thread-safe ring buffer that captures emitted events for the /admin/logs endpoint.
+// Uses tail sampling: always keeps errors, warnings, and slow requests;
+// randomly samples successful fast requests.
 type Buffer struct {
-	mu     sync.Mutex
-	events []map[string]any
-	size   int
-	cursor int
-	count  int
+	mu             sync.Mutex
+	events         []map[string]any
+	size           int
+	cursor         int
+	count          int
+	sampleRate     float64
+	slowThresholdMs int64
 }
 
 var globalBuf *Buffer
 
-// NewBuffer creates a ring buffer that holds the last n events.
+// NewBuffer creates a ring buffer that holds the last n events with tail sampling.
 func NewBuffer(n int) *Buffer {
-	return &Buffer{events: make([]map[string]any, n), size: n}
+	return &Buffer{
+		events:          make([]map[string]any, n),
+		size:            n,
+		sampleRate:      DefaultSampleRate,
+		slowThresholdMs: DefaultSlowThreshMs,
+	}
 }
 
 // SetBuffer configures the global event buffer. Call once at startup.
 func SetBuffer(b *Buffer) { globalBuf = b }
 
+// shouldKeep implements tail sampling logic.
+func (b *Buffer) shouldKeep(fields map[string]any) bool {
+	// Always keep errors and warnings
+	if lvl, ok := fields["level"].(string); ok {
+		if lvl == "ERROR" || lvl == "WARN" {
+			return true
+		}
+	}
+
+	// Always keep slow requests
+	if dur, ok := fields["duration_ms"].(int64); ok && dur >= b.slowThresholdMs {
+		return true
+	}
+
+	// Always keep non-HTTP events (ingestion, operations)
+	if _, hasOp := fields["operation"]; hasOp {
+		return true
+	}
+
+	// Sample the rest
+	return rand.Float64() < b.sampleRate
+}
+
 func (b *Buffer) append(fields map[string]any) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if !b.shouldKeep(fields) {
+		return
+	}
 	b.events[b.cursor] = fields
 	b.cursor = (b.cursor + 1) % b.size
 	if b.count < b.size {
@@ -63,9 +108,18 @@ func (b *Buffer) Recent(n int) []map[string]any {
 	return result
 }
 
+// envFields are environment characteristics included in every wide event.
+// Set once at startup via SetEnvFields.
+var envFields []any
+
+// SetEnvFields configures environment context for all wide events.
+func SetEnvFields(kvs ...any) { envFields = kvs }
+
 // New creates a new wide event with the given initial key-value pairs.
+// Environment fields are automatically included.
 func New(initial ...any) *Event {
 	e := &Event{fields: make(map[string]any), start: time.Now()}
+	e.Set(envFields...)
 	e.Set(initial...)
 	return e
 }

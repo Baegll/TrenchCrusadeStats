@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/natalie-johanek/trench-analytics/internal/logging"
 )
 
@@ -18,6 +20,7 @@ func WideEventMiddleware(next http.Handler) http.Handler {
 			"query", r.URL.RawQuery,
 			"remote_ip", r.RemoteAddr,
 			"user_agent", r.UserAgent(),
+			"request_id", middleware.GetReqID(r.Context()),
 		)
 
 		ctx := logging.WithEvent(r.Context(), event)
