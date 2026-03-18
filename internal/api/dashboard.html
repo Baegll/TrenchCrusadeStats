@@ -9,9 +9,10 @@
 body{font-family:system-ui,sans-serif;background:#111;color:#e0e0e0;padding:1rem}
 h1{font-size:1.3rem;margin-bottom:1rem;color:#ccc}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-bottom:1rem}
-.card{background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:1rem}
+.card{background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:1rem;margin-bottom:1rem}
 .card h2{font-size:.85rem;text-transform:uppercase;color:#888;margin-bottom:.5rem;letter-spacing:.05em}
 .card .val{font-size:1.8rem;font-weight:700}
+.endpoint{font-size:.7rem;color:#555;font-family:monospace;margin-bottom:.5rem}
 .ok{color:#4ade80}.err{color:#f87171}.warn{color:#facc15}.idle{color:#888}
 table{width:100%;border-collapse:collapse;font-size:.85rem}
 th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid #222}
@@ -29,22 +30,70 @@ th{color:#888;text-transform:uppercase;font-size:.75rem}
 <h1>&#9876; Trench Analytics</h1>
 <div class="auth">
 <input id="apiKey" type="password" placeholder="API Key" autocomplete="off">
-<button onclick="startPolling()">Connect</button>
+<button onclick="connect()">Connect</button>
+<button onclick="poll()" id="refreshBtn" style="display:none">Refresh All</button>
 <span id="authStatus"></span>
 </div>
 
 <div class="grid">
-<div class="card"><h2>Health</h2><div class="val" id="health">—</div><div id="lastIngestion" style="font-size:.75rem;color:#888;margin-top:.3rem"></div></div>
-<div class="card"><h2>Sync Status</h2><div class="val" id="syncStatus">—</div><div id="syncProgress" style="margin-top:.5rem;display:none"><div class="bar" style="height:10px"><div class="bar-fill" id="syncBar" style="width:0%"></div></div><div style="font-size:.75rem;color:#888;margin-top:.3rem" id="syncProgressText"></div></div><div id="syncDetail" style="font-size:.75rem;color:#888;margin-top:.3rem"></div><div id="syncPrev" style="font-size:.75rem;color:#666;margin-top:.3rem"></div></div>
-<div class="card"><h2>Total Games</h2><div class="val" id="totalGames">—</div></div>
-<div class="card"><h2>Ranked / Unranked</h2><div class="val" id="rankedSplit">—</div></div>
+<div class="card"><h2>Health</h2><div class="endpoint">GET /api/v1/health</div><div class="val" id="health">—</div><div id="lastIngestion" style="font-size:.75rem;color:#888;margin-top:.3rem"></div></div>
+<div class="card"><h2>Sync Status</h2><div class="endpoint">GET /api/v1/sync/status</div><div class="val" id="syncStatus">—</div><div id="syncProgress" style="margin-top:.5rem;display:none"><div class="bar" style="height:10px"><div class="bar-fill" id="syncBar" style="width:0%"></div></div><div style="font-size:.75rem;color:#888;margin-top:.3rem" id="syncProgressText"></div></div><div id="syncDetail" style="font-size:.75rem;color:#888;margin-top:.3rem"></div><div id="syncPrev" style="font-size:.75rem;color:#666;margin-top:.3rem"></div></div>
+<div class="card"><h2>Total Games</h2><div class="endpoint">GET /api/v1/stats/summary</div><div class="val" id="totalGames">—</div></div>
+<div class="card"><h2>Ranked / Unranked</h2><div class="endpoint">GET /api/v1/stats/summary</div><div class="val" id="rankedSplit">—</div></div>
 </div>
 
-<div class="card" style="margin-bottom:1rem">
+<div class="card">
 <h2>Faction Win Rates</h2>
+<div class="endpoint">GET /api/v1/stats/factions</div>
 <table><thead><tr><th>Faction</th><th>Win Rate</th><th></th><th>Games</th><th>Pick Rate</th></tr></thead>
 <tbody id="factionBody"><tr><td colspan="5" style="color:#888">Connect to load data</td></tr></tbody>
 </table>
+</div>
+
+<div class="card">
+<h2>Unit Stats</h2>
+<div class="endpoint">GET /api/v1/stats/units</div>
+<table><thead><tr><th>Faction</th><th>Unit</th><th>Type</th><th>Appearances</th><th>Win Rate</th><th></th><th>Pick %</th></tr></thead>
+<tbody id="unitBody"><tr><td colspan="7" style="color:#888">Connect to load data</td></tr></tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Equipment Stats</h2>
+<div class="endpoint">GET /api/v1/stats/equipment</div>
+<table><thead><tr><th>Unit</th><th>Equipment</th><th>Times Taken</th><th>Times Won</th><th>Win Rate</th><th></th></tr></thead>
+<tbody id="equipBody"><tr><td colspan="6" style="color:#888">Connect to load data</td></tr></tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Scenario Stats</h2>
+<div class="endpoint">GET /api/v1/stats/scenarios</div>
+<table><thead><tr><th>Scenario</th><th>Faction</th><th>Wins</th><th>Total</th><th>Win Rate</th><th></th></tr></thead>
+<tbody id="scenarioBody"><tr><td colspan="6" style="color:#888">Connect to load data</td></tr></tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Warband Cost Stats</h2>
+<div class="endpoint">GET /api/v1/stats/warband-costs</div>
+<table><thead><tr><th>Faction</th><th>Result</th><th>Avg Ducats</th><th>Median</th><th>Min</th><th>Max</th></tr></thead>
+<tbody id="warbandBody"><tr><td colspan="6" style="color:#888">Connect to load data</td></tr></tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Deed Stats</h2>
+<div class="endpoint">GET /api/v1/stats/deeds</div>
+<table><thead><tr><th>Deed</th><th>Total</th><th>Attributed</th><th>Games w/ Deed</th></tr></thead>
+<tbody id="deedBody"><tr><td colspan="4" style="color:#888">Connect to load data</td></tr></tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Meta</h2>
+<div class="endpoint">GET /api/v1/stats/meta</div>
+<div id="metaContent" style="font-size:.85rem;color:#888">Connect to load data</div>
 </div>
 
 <div id="status"></div>
@@ -77,7 +126,6 @@ async function pollSync(){
     const cls={completed:'ok',running:'warn',failed:'err',no_runs:'idle'}[d.status]||'idle';
     setEl('syncStatus',`<span class="${cls}">${d.status.toUpperCase()}</span>`);
 
-    // Progress bar — show for running, completed, and failed
     const prog=document.getElementById('syncProgress');
     const bar=document.getElementById('syncBar');
     if(d.status!=='no_runs'&&d.ids_scanned>0){
@@ -89,7 +137,6 @@ async function pollSync(){
       setEl('syncProgressText',`${d.ids_scanned.toLocaleString()} / ${total.toLocaleString()} records (${pct}%)`);
     }else{prog.style.display='none'}
 
-    // Current run timestamps
     let detail=[];
     if(d.started_at) detail.push('Started: '+new Date(d.started_at).toLocaleString());
     if(d.completed_at) detail.push('Finished: '+new Date(d.completed_at).toLocaleString());
@@ -97,7 +144,6 @@ async function pollSync(){
     if(d.errors) detail.push('Errors: '+d.errors);
     setEl('syncDetail',detail.join(' · '));
 
-    // Previous run timestamps
     let prev=[];
     if(d.prev_started_at) prev.push('Prev run: '+new Date(d.prev_started_at).toLocaleString());
     if(d.prev_completed_at) prev.push('→ '+new Date(d.prev_completed_at).toLocaleString());
@@ -129,25 +175,122 @@ async function pollFactions(){
   }catch(e){setEl('factionBody','<tr><td colspan="5" class="err">Failed to load</td></tr>')}
 }
 
-async function poll(){
-  setEl('status','Last poll: '+new Date().toLocaleTimeString());
-  await Promise.allSettled([pollHealth(),pollSync(),pollSummary(),pollFactions()]);
+async function pollUnits(){
+  try{
+    const d=await fetchJSON('/api/v1/stats/units?min_games=1',{headers:hdr()});
+    const rows=d.units||[];
+    if(!rows.length){setEl('unitBody','<tr><td colspan="7" style="color:#888">No data</td></tr>');return}
+    rows.sort((a,b)=>b.appearances-a.appearances);
+    setEl('unitBody',rows.map(u=>`<tr>
+      <td>${u.base_faction}</td>
+      <td>${u.unit_name}</td>
+      <td>${u.unit_type}</td>
+      <td>${u.appearances}</td>
+      <td>${(u.win_rate*100).toFixed(1)}%</td>
+      <td><div class="bar"><div class="bar-fill" style="width:${(u.win_rate*100).toFixed(0)}%"></div></div></td>
+      <td>${(u.pick_pct*100).toFixed(1)}%</td>
+    </tr>`).join(''));
+  }catch(e){setEl('unitBody','<tr><td colspan="7" class="err">Failed to load</td></tr>')}
 }
 
-function startPolling(){
+async function pollEquipment(){
+  try{
+    const d=await fetchJSON('/api/v1/stats/equipment?min_games=1',{headers:hdr()});
+    const rows=d.equipment||[];
+    if(!rows.length){setEl('equipBody','<tr><td colspan="6" style="color:#888">No data</td></tr>');return}
+    rows.sort((a,b)=>b.times_taken-a.times_taken);
+    setEl('equipBody',rows.map(e=>{
+      const wr=e.times_taken>0?((e.times_won/e.times_taken)*100).toFixed(1):'0.0';
+      return `<tr>
+      <td>${e.unit_name}</td>
+      <td>${e.equipment_name}</td>
+      <td>${e.times_taken}</td>
+      <td>${e.times_won}</td>
+      <td>${wr}%</td>
+      <td><div class="bar"><div class="bar-fill" style="width:${wr}%"></div></div></td>
+    </tr>`}).join(''));
+  }catch(e){setEl('equipBody','<tr><td colspan="6" class="err">Failed to load</td></tr>')}
+}
+
+async function pollScenarios(){
+  try{
+    const d=await fetchJSON('/api/v1/stats/scenarios?min_games=1',{headers:hdr()});
+    const rows=d.scenarios||[];
+    if(!rows.length){setEl('scenarioBody','<tr><td colspan="6" style="color:#888">No data</td></tr>');return}
+    rows.sort((a,b)=>b.total-a.total);
+    setEl('scenarioBody',rows.map(s=>`<tr>
+      <td>${s.scenario_id}</td>
+      <td>${s.base_faction}</td>
+      <td>${s.wins}</td>
+      <td>${s.total}</td>
+      <td>${(s.win_rate*100).toFixed(1)}%</td>
+      <td><div class="bar"><div class="bar-fill" style="width:${(s.win_rate*100).toFixed(0)}%"></div></div></td>
+    </tr>`).join(''));
+  }catch(e){setEl('scenarioBody','<tr><td colspan="6" class="err">Failed to load</td></tr>')}
+}
+
+async function pollWarband(){
+  try{
+    const d=await fetchJSON('/api/v1/stats/warband-costs?min_games=1',{headers:hdr()});
+    const rows=d.costs||[];
+    if(!rows.length){setEl('warbandBody','<tr><td colspan="6" style="color:#888">No data</td></tr>');return}
+    rows.sort((a,b)=>a.base_faction.localeCompare(b.base_faction)||a.result.localeCompare(b.result));
+    setEl('warbandBody',rows.map(c=>`<tr>
+      <td>${c.base_faction}</td>
+      <td>${c.result}</td>
+      <td>${c.avg_ducats.toLocaleString()}</td>
+      <td>${c.median_ducats.toLocaleString()}</td>
+      <td>${c.min_ducats.toLocaleString()}</td>
+      <td>${c.max_ducats.toLocaleString()}</td>
+    </tr>`).join(''));
+  }catch(e){setEl('warbandBody','<tr><td colspan="6" class="err">Failed to load</td></tr>')}
+}
+
+async function pollDeeds(){
+  try{
+    const d=await fetchJSON('/api/v1/stats/deeds?min_games=10',{headers:hdr()});
+    const rows=d.deeds||[];
+    if(!rows.length){setEl('deedBody','<tr><td colspan="4" style="color:#888">No data</td></tr>');return}
+    rows.sort((a,b)=>b.total_occurrences-a.total_occurrences);
+    setEl('deedBody',rows.map(d=>`<tr>
+      <td>${d.deed_name}</td>
+      <td>${d.total_occurrences}</td>
+      <td>${d.attributed_occurrences}</td>
+      <td>${d.games_with_deed}</td>
+    </tr>`).join(''));
+  }catch(e){setEl('deedBody','<tr><td colspan="4" class="err">Failed to load</td></tr>')}
+}
+
+async function pollMeta(){
+  try{
+    const d=await fetchJSON('/api/v1/stats/meta',{headers:hdr()});
+    const factions=(d.factions||[]).map(f=>f.display_name).join(', ');
+    const scenarios=(d.scenarios||[]).join(', ');
+    const dr=d.date_range||{};
+    setEl('metaContent',`
+      <div style="margin-bottom:.5rem"><strong style="color:#aaa">Factions (${(d.factions||[]).length}):</strong> ${factions||'—'}</div>
+      <div style="margin-bottom:.5rem"><strong style="color:#aaa">Scenarios (${(d.scenarios||[]).length}):</strong> ${scenarios||'—'}</div>
+      <div><strong style="color:#aaa">Date Range:</strong> ${dr.earliest||'—'} → ${dr.latest||'—'}</div>
+    `);
+  }catch(e){setEl('metaContent','<span class="err">Failed to load</span>')}
+}
+
+async function poll(){
+  setEl('status','Last refresh: '+new Date().toLocaleTimeString());
+  await Promise.allSettled([pollHealth(),pollSync(),pollSummary(),pollFactions(),pollUnits(),pollEquipment(),pollScenarios(),pollWarband(),pollDeeds(),pollMeta()]);
+}
+
+function connect(){
   key=document.getElementById('apiKey').value;
   if(!key){setEl('authStatus','<span class="err">Enter API key</span>');return}
   localStorage.setItem('tc_api_key',key);
   setEl('authStatus','<span class="ok">Connected</span>');
-  if(timer) clearInterval(timer);
+  document.getElementById('refreshBtn').style.display='';
   poll();
-  timer=setInterval(poll,15000);
 }
 
-// Health is public, poll it immediately
 pollHealth();
-// Auto-connect if key was saved
-if(key){document.getElementById('apiKey').value=key;startPolling()}
+if(key){document.getElementById('apiKey').value=key;connect()}
 </script>
 </body>
 </html>
