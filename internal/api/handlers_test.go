@@ -17,7 +17,7 @@ import (
 func testServer(t *testing.T) (*httptest.Server, *db.DB) {
 	t.Helper()
 	ctx := context.Background()
-	store, err := db.Open(ctx, "", db.Migrations{1: db.Migration001})
+	store, err := db.Open(ctx, "", db.Migrations{1: db.Migration001, 2: db.Migration002})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +435,7 @@ func TestSyncWait(t *testing.T) {
 func closedDBServer(t *testing.T) (*httptest.Server, *db.DB) {
 	t.Helper()
 	ctx := context.Background()
-	store, err := db.Open(ctx, "", db.Migrations{1: db.Migration001})
+	store, err := db.Open(ctx, "", db.Migrations{1: db.Migration001, 2: db.Migration002})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +499,7 @@ func TestHandlers_500_OnClosedDB(t *testing.T) {
 
 func TestTriggerSync_Conflict(t *testing.T) {
 	ctx := context.Background()
-	store, err := db.Open(ctx, "", db.Migrations{1: db.Migration001})
+	store, err := db.Open(ctx, "", db.Migrations{1: db.Migration001, 2: db.Migration002})
 	if err != nil {
 		t.Fatal(err)
 	}

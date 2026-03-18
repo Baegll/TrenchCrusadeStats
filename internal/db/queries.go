@@ -26,11 +26,11 @@ type Executor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// InsertRawReport inserts a raw JSON report. Returns false if already exists.
-func InsertRawReport(ctx context.Context, ex Executor, id int, rawJSON json.RawMessage) (bool, error) {
+// InsertRawReport inserts a raw report marker for idempotency. Returns false if already exists.
+func InsertRawReport(ctx context.Context, ex Executor, id int) (bool, error) {
 	res, err := ex.ExecContext(ctx,
-		`INSERT OR IGNORE INTO raw_game_reports (game_report_id, raw_json) VALUES ($1, $2)`,
-		id, string(rawJSON),
+		`INSERT OR IGNORE INTO raw_game_reports (game_report_id) VALUES ($1)`,
+		id,
 	)
 	if err != nil {
 		return false, fmt.Errorf("inserting raw report %d: %w", id, err)
@@ -57,11 +57,10 @@ func InsertParticipant(ctx context.Context, ex Executor, p models.GameParticipan
 	_, err := ex.ExecContext(ctx,
 		`INSERT INTO game_participants
 		 (game_report_id, warband_id, player_id, faction_slug, base_faction, result,
-		  kills, vp, warband_name, warband_ducats, warband_glory, roster_hash, warband_snapshot)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		  kills, vp, warband_name, warband_ducats, warband_glory, roster_hash)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		p.GameReportID, p.WarbandID, p.PlayerID, p.FactionSlug, p.BaseFaction, p.Result,
 		p.Kills, p.VP, p.WarbandName, p.WarbandDucats, p.WarbandGlory, p.RosterHash,
-		string(p.WarbandSnapshot),
 	)
 	return err
 }

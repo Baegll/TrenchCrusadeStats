@@ -14,7 +14,7 @@ import (
 func testDB(t *testing.T) *DB {
 	t.Helper()
 	ctx := context.Background()
-	d, err := Open(ctx, "", Migrations{1: Migration001})
+	d, err := Open(ctx, "", Migrations{1: Migration001, 2: Migration002})
 	if err != nil {
 		t.Fatalf("opening test db: %v", err)
 	}
@@ -47,17 +47,17 @@ func seedGames(t *testing.T, d *DB) {
 
 	participants := []models.GameParticipant{
 		// Game 1: A(100) wins vs B(200)
-		{GameReportID: 1, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "win", Kills: 3, VP: 1, WarbandName: "WA", WarbandDucats: 500, RosterHash: "h1", WarbandSnapshot: json.RawMessage(`{}`)},
-		{GameReportID: 1, WarbandID: 200, PlayerID: 2, FactionSlug: "fc_hereticlegion", BaseFaction: "fc_hereticlegion", Result: "loss", Kills: 1, VP: 0, WarbandName: "WB", WarbandDucats: 450, RosterHash: "h2", WarbandSnapshot: json.RawMessage(`{}`)},
+		{GameReportID: 1, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "win", Kills: 3, VP: 1, WarbandName: "WA", WarbandDucats: 500, RosterHash: "h1"},
+		{GameReportID: 1, WarbandID: 200, PlayerID: 2, FactionSlug: "fc_hereticlegion", BaseFaction: "fc_hereticlegion", Result: "loss", Kills: 1, VP: 0, WarbandName: "WB", WarbandDucats: 450, RosterHash: "h2"},
 		// Game 2: A(100) wins vs B(200)
-		{GameReportID: 2, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "win", Kills: 4, VP: 2, WarbandName: "WA", WarbandDucats: 520, RosterHash: "h1", WarbandSnapshot: json.RawMessage(`{}`)},
-		{GameReportID: 2, WarbandID: 200, PlayerID: 2, FactionSlug: "fc_hereticlegion", BaseFaction: "fc_hereticlegion", Result: "loss", Kills: 2, VP: 0, WarbandName: "WB", WarbandDucats: 460, RosterHash: "h2", WarbandSnapshot: json.RawMessage(`{}`)},
+		{GameReportID: 2, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "win", Kills: 4, VP: 2, WarbandName: "WA", WarbandDucats: 520, RosterHash: "h1"},
+		{GameReportID: 2, WarbandID: 200, PlayerID: 2, FactionSlug: "fc_hereticlegion", BaseFaction: "fc_hereticlegion", Result: "loss", Kills: 2, VP: 0, WarbandName: "WB", WarbandDucats: 460, RosterHash: "h2"},
 		// Game 3: C(300) wins vs A(100) — unranked
-		{GameReportID: 3, WarbandID: 300, PlayerID: 3, FactionSlug: "fc_trenchpilgrim", BaseFaction: "fc_trenchpilgrim", Result: "win", Kills: 5, VP: 3, WarbandName: "WC", WarbandDucats: 600, RosterHash: "h3", WarbandSnapshot: json.RawMessage(`{}`)},
-		{GameReportID: 3, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "loss", Kills: 2, VP: 1, WarbandName: "WA", WarbandDucats: 510, RosterHash: "h1", WarbandSnapshot: json.RawMessage(`{}`)},
+		{GameReportID: 3, WarbandID: 300, PlayerID: 3, FactionSlug: "fc_trenchpilgrim", BaseFaction: "fc_trenchpilgrim", Result: "win", Kills: 5, VP: 3, WarbandName: "WC", WarbandDucats: 600, RosterHash: "h3"},
+		{GameReportID: 3, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "loss", Kills: 2, VP: 1, WarbandName: "WA", WarbandDucats: 510, RosterHash: "h1"},
 		// Game 4: A(100) wins vs C(300) — unranked
-		{GameReportID: 4, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "win", Kills: 3, VP: 2, WarbandName: "WA", WarbandDucats: 530, RosterHash: "h1", WarbandSnapshot: json.RawMessage(`{}`)},
-		{GameReportID: 4, WarbandID: 300, PlayerID: 3, FactionSlug: "fc_trenchpilgrim", BaseFaction: "fc_trenchpilgrim", Result: "loss", Kills: 1, VP: 0, WarbandName: "WC", WarbandDucats: 580, RosterHash: "h3", WarbandSnapshot: json.RawMessage(`{}`)},
+		{GameReportID: 4, WarbandID: 100, PlayerID: 1, FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", Result: "win", Kills: 3, VP: 2, WarbandName: "WA", WarbandDucats: 530, RosterHash: "h1"},
+		{GameReportID: 4, WarbandID: 300, PlayerID: 3, FactionSlug: "fc_trenchpilgrim", BaseFaction: "fc_trenchpilgrim", Result: "loss", Kills: 1, VP: 0, WarbandName: "WC", WarbandDucats: 580, RosterHash: "h3"},
 	}
 
 	units := []models.GameUnit{
@@ -73,7 +73,7 @@ func seedGames(t *testing.T, d *DB) {
 	}
 
 	for _, g := range games {
-		if _, err := conn.ExecContext(ctx, `INSERT INTO raw_game_reports (game_report_id, raw_json) VALUES ($1, '{}')`, g.id); err != nil {
+		if _, err := conn.ExecContext(ctx, `INSERT INTO raw_game_reports (game_report_id) VALUES ($1)`, g.id); err != nil {
 			t.Fatal(err)
 		}
 		isDraw := g.winner == nil
@@ -114,13 +114,13 @@ func TestOpen_AndMigrate(t *testing.T) {
 
 func TestOpen_MigrationIdempotent(t *testing.T) {
 	ctx := context.Background()
-	d, err := Open(ctx, "", Migrations{1: Migration001})
+	d, err := Open(ctx, "", Migrations{1: Migration001, 2: Migration002})
 	if err != nil {
 		t.Fatal(err)
 	}
 	d.Close()
 	// Open again — should not fail on re-apply
-	d2, err := Open(ctx, "", Migrations{1: Migration001})
+	d2, err := Open(ctx, "", Migrations{1: Migration001, 2: Migration002})
 	if err != nil {
 		t.Fatalf("second open failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestInsertRawReport_Idempotent(t *testing.T) {
 	}
 	defer release()
 
-	isNew, err := InsertRawReport(ctx, conn, 999, json.RawMessage(`{"test":true}`))
+	isNew, err := InsertRawReport(ctx, conn, 999)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestInsertRawReport_Idempotent(t *testing.T) {
 		t.Error("first insert should be new")
 	}
 
-	isNew2, err := InsertRawReport(ctx, conn, 999, json.RawMessage(`{"test":true}`))
+	isNew2, err := InsertRawReport(ctx, conn, 999)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestExecTx_Rollback(t *testing.T) {
 	defer release()
 
 	// Insert raw first
-	InsertRawReport(ctx, conn, 888, json.RawMessage(`{}`))
+	InsertRawReport(ctx, conn, 888)
 
 	// Try a tx that fails partway
 	txErr := ExecTx(ctx, conn, func(tx *sql.Tx) error {
@@ -703,7 +703,7 @@ func TestExecTx_CommitSuccess(t *testing.T) {
 	}
 	defer release()
 
-	InsertRawReport(ctx, conn, 555, json.RawMessage(`{}`))
+	InsertRawReport(ctx, conn, 555)
 
 	err = ExecTx(ctx, conn, func(tx *sql.Tx) error {
 		return InsertGame(ctx, tx, models.Game{GameReportID: 555, ReportDate: time.Now(), ScenarioID: "sc_test", IsRanked: true, IsDraw: true})
@@ -836,7 +836,7 @@ func TestQueryLatestIngestion_WithData(t *testing.T) {
 }
 
 func TestOpen_BadPath(t *testing.T) {
-	_, err := Open(context.Background(), "/nonexistent/path/db.duckdb", Migrations{1: Migration001})
+	_, err := Open(context.Background(), "/nonexistent/path/db.duckdb", Migrations{1: Migration001, 2: Migration002})
 	if err == nil {
 		t.Error("expected error for bad path")
 	}
@@ -844,14 +844,14 @@ func TestOpen_BadPath(t *testing.T) {
 
 func TestMigrate_BadSQL(t *testing.T) {
 	ctx := context.Background()
-	d, err := Open(ctx, "", Migrations{1: Migration001})
+	d, err := Open(ctx, "", Migrations{1: Migration001, 2: Migration002})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer d.Close()
 
-	// Try to apply a bad migration (version 2 with invalid SQL)
-	err = d.migrate(ctx, Migrations{2: "INVALID SQL STATEMENT !!!"})
+	// Try to apply a bad migration (version 3 with invalid SQL)
+	err = d.migrate(ctx, Migrations{3: "INVALID SQL STATEMENT !!!"})
 	if err == nil {
 		t.Error("expected error for bad migration SQL")
 	}

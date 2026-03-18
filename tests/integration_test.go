@@ -91,7 +91,7 @@ func setupEnv(t *testing.T, reports map[int]models.SynodReport) *testEnv {
 		json.NewEncoder(w).Encode(report)
 	}))
 
-	store, err := db.Open(context.Background(), "", db.Migrations{1: db.Migration001})
+	store, err := db.Open(context.Background(), "", db.Migrations{1: db.Migration001, 2: db.Migration002})
 	if err != nil {
 		synod.Close()
 		t.Fatal(err)

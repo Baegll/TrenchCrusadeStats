@@ -20,7 +20,7 @@ import (
 )
 
 func migrations() db.Migrations {
-	return db.Migrations{1: db.Migration001}
+	return db.Migrations{1: db.Migration001, 2: db.Migration002}
 }
 
 // Version is set at build time via -ldflags.

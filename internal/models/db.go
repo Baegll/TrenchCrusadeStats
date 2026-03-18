@@ -29,7 +29,6 @@ type GameParticipant struct {
 	WarbandDucats   int
 	WarbandGlory    int
 	RosterHash      string
-	WarbandSnapshot json.RawMessage
 }
 
 // GameUnit represents a row in the game_units table.

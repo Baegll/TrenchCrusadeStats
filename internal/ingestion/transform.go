@@ -99,11 +99,6 @@ func Transform(report *models.SynodReport) (*TransformResult, error) {
 
 		rosterHash := computeRosterHash(allUnits)
 
-		snapshot, err := json.Marshal(exp)
-		if err != nil {
-			return nil, fmt.Errorf("marshaling warband snapshot for %d: %w", exp.WID, err)
-		}
-
 		participants = append(participants, models.GameParticipant{
 			GameReportID:    report.GameReportID,
 			WarbandID:       exp.WID,
@@ -117,7 +112,6 @@ func Transform(report *models.SynodReport) (*TransformResult, error) {
 			WarbandDucats:   exp.DR,
 			WarbandGlory:    exp.GR,
 			RosterHash:      rosterHash,
-			WarbandSnapshot: snapshot,
 		})
 
 		for rowIdx, entry := range allUnits {

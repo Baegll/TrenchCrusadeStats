@@ -107,7 +107,7 @@ func makeTestReport(id int, winner int) models.SynodReport {
 
 func testStore(t *testing.T) *db.DB {
 	t.Helper()
-	store, err := db.Open(context.Background(), "", db.Migrations{1: db.Migration001})
+	store, err := db.Open(context.Background(), "", db.Migrations{1: db.Migration001, 2: db.Migration002})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,9 +125,8 @@ func TestIngestOne(t *testing.T) {
 	defer release()
 
 	report := makeTestReport(100, 10)
-	raw, _ := json.Marshal(report)
 
-	if err := ingestOne(ctx, conn, &report, raw); err != nil {
+	if err := ingestOne(ctx, conn, &report); err != nil {
 		t.Fatalf("ingestOne: %v", err)
 	}
 
@@ -156,10 +155,9 @@ func TestIngestOne_Idempotent(t *testing.T) {
 	defer release()
 
 	report := makeTestReport(100, 10)
-	raw, _ := json.Marshal(report)
 
-	ingestOne(ctx, conn, &report, raw)
-	if err := ingestOne(ctx, conn, &report, raw); err != nil {
+	ingestOne(ctx, conn, &report)
+	if err := ingestOne(ctx, conn, &report); err != nil {
 		t.Fatalf("second ingestOne should not error: %v", err)
 	}
 
@@ -273,9 +271,8 @@ func TestIngestOne_PanicRecovery(t *testing.T) {
 			Warbands:   nil,
 		},
 	}
-	raw, _ := json.Marshal(report)
 
-	err = ingestOne(ctx, conn, report, raw)
+	err = ingestOne(ctx, conn, report)
 	if err == nil {
 		t.Error("expected error from invalid report")
 	}
@@ -308,9 +305,8 @@ func TestIngestOne_TransformFailStoresRaw(t *testing.T) {
 			},
 		},
 	}
-	raw, _ := json.Marshal(report)
 
-	err = ingestOne(ctx, conn, report, raw)
+	err = ingestOne(ctx, conn, report)
 	if err == nil {
 		t.Error("expected transform error")
 	}

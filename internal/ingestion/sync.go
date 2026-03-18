@@ -178,8 +178,7 @@ type paginatedReport struct {
 func (s *Syncer) processRawReport(ctx context.Context, conn *sql.Conn, rawJSON json.RawMessage, t *runTracker) {
 	var wrapper paginatedReport
 	if err := json.Unmarshal(rawJSON, &wrapper); err != nil {
-		slog.Warn("decode error", "err", err)
-		t.errors++
+		t.recordError("decode_error", 0, err)
 		return
 	}
 
@@ -187,23 +186,21 @@ func (s *Syncer) processRawReport(ctx context.Context, conn *sql.Conn, rawJSON j
 	if report.GameReportID == 0 {
 		// Fall back to direct shape (single-report endpoint)
 		if err := json.Unmarshal(rawJSON, report); err != nil {
-			slog.Warn("decode error", "err", err)
-			t.errors++
+			t.recordError("decode_error", 0, err)
 			return
 		}
 	}
 
 	t.found++
-	if err := ingestOne(ctx, conn, report, rawJSON); err != nil {
-		slog.Warn("ingest error", "id", report.GameReportID, "err", err)
-		t.errors++
+	if err := ingestOne(ctx, conn, report); err != nil {
+		t.recordError("transform_error", report.GameReportID, err)
 		return
 	}
 	t.inserted++
 }
 
 // ingestOne transforms and inserts a single report inside a transaction with panic recovery.
-func ingestOne(ctx context.Context, conn *sql.Conn, report *models.SynodReport, rawJSON json.RawMessage) (retErr error) {
+func ingestOne(ctx context.Context, conn *sql.Conn, report *models.SynodReport) (retErr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			retErr = fmt.Errorf("panic processing report %d: %v", report.GameReportID, r)
@@ -212,14 +209,14 @@ func ingestOne(ctx context.Context, conn *sql.Conn, report *models.SynodReport, 
 
 	result, err := Transform(report)
 	if err != nil {
-		if _, insertErr := db.InsertRawReport(ctx, conn, report.GameReportID, rawJSON); insertErr != nil {
+		if _, insertErr := db.InsertRawReport(ctx, conn, report.GameReportID); insertErr != nil {
 			slog.Warn("failed to store raw report for failed transform", "id", report.GameReportID, "err", insertErr)
 		}
 		return fmt.Errorf("transform report %d: %w", report.GameReportID, err)
 	}
 
 	return db.ExecTx(ctx, conn, func(tx *sql.Tx) error {
-		isNew, err := db.InsertRawReport(ctx, tx, report.GameReportID, rawJSON)
+		isNew, err := db.InsertRawReport(ctx, tx, report.GameReportID)
 		if err != nil {
 			return err
 		}
@@ -251,17 +248,33 @@ func ingestOne(ctx context.Context, conn *sql.Conn, report *models.SynodReport, 
 
 // runTracker accumulates stats for an ingestion run.
 type runTracker struct {
-	runID     int
-	startTime time.Time
-	found     int
-	inserted  int
-	scanned   int
-	errors    int
-	notes     string
+	runID           int
+	startTime       time.Time
+	found           int
+	inserted        int
+	scanned         int
+	errors          int
+	notes           string
+	errorCategories map[string]int
 }
 
 func newRunTracker(runID int) *runTracker {
-	return &runTracker{runID: runID, startTime: time.Now()}
+	return &runTracker{runID: runID, startTime: time.Now(), errorCategories: make(map[string]int)}
+}
+
+// recordError emits a wide event for the failed report and tracks the category.
+func (t *runTracker) recordError(category string, reportID int, err error) {
+	t.errors++
+	t.errorCategories[category]++
+
+	event := logging.New(
+		"operation", "ingest_error",
+		"run_id", t.runID,
+		"category", category,
+		"game_report_id", reportID,
+		"error", err.Error(),
+	)
+	event.Emit(slog.LevelWarn)
 }
 
 // finish writes the final ingestion stats and emits a wide event.
@@ -286,6 +299,7 @@ func (t *runTracker) finish(conn *sql.Conn) {
 		"reports_inserted", t.inserted,
 		"ids_scanned", t.scanned,
 		"errors", t.errors,
+		"error_categories", t.errorCategories,
 		"notes", t.notes,
 	)
 	level := slog.LevelInfo
