@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -92,9 +93,17 @@ func runServe(ctx context.Context) error {
 		return err
 	}
 
+	var apiKeys []string
+	for _, k := range strings.Split(apiKey, ",") {
+		k = strings.TrimSpace(k)
+		if k != "" {
+			apiKeys = append(apiKeys, k)
+		}
+	}
+
 	server := api.NewServer(
 		store, syncer,
-		apiKey,
+		apiKeys,
 		envOrDefault("ADMIN_USERNAME", "admin"),
 		adminPass,
 		envIntOrDefault("ANALYTICS_RATE_LIMIT", 60),

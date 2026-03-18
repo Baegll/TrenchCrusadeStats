@@ -25,16 +25,21 @@ func BasicAuth(username, password string) func(http.Handler) http.Handler {
 }
 
 // APIKeyAuth returns middleware that checks the X-Api-Key header using constant-time comparison.
-func APIKeyAuth(key string) func(http.Handler) http.Handler {
-	keyBytes := []byte(key)
+func APIKeyAuth(keys []string) func(http.Handler) http.Handler {
+	keyBytes := make([][]byte, len(keys))
+	for i, k := range keys {
+		keyBytes[i] = []byte(k)
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			provided := []byte(r.Header.Get("X-Api-Key"))
-			if subtle.ConstantTimeCompare(provided, keyBytes) != 1 {
-				writeError(w, http.StatusUnauthorized, "unauthorized", "invalid or missing API key")
-				return
+			for _, kb := range keyBytes {
+				if subtle.ConstantTimeCompare(provided, kb) == 1 {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
-			next.ServeHTTP(w, r)
+			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid or missing API key")
 		})
 	}
 }

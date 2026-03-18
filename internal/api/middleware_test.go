@@ -7,7 +7,7 @@ import (
 )
 
 func TestAPIKeyAuth_Valid(t *testing.T) {
-	handler := APIKeyAuth("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := APIKeyAuth([]string{"secret"})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
 	req := httptest.NewRequest("GET", "/", nil)
@@ -20,7 +20,7 @@ func TestAPIKeyAuth_Valid(t *testing.T) {
 }
 
 func TestAPIKeyAuth_Invalid(t *testing.T) {
-	handler := APIKeyAuth("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := APIKeyAuth([]string{"secret"})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not be called")
 	}))
 	req := httptest.NewRequest("GET", "/", nil)
@@ -33,7 +33,7 @@ func TestAPIKeyAuth_Invalid(t *testing.T) {
 }
 
 func TestAPIKeyAuth_Missing(t *testing.T) {
-	handler := APIKeyAuth("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := APIKeyAuth([]string{"secret"})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not be called")
 	}))
 	req := httptest.NewRequest("GET", "/", nil)

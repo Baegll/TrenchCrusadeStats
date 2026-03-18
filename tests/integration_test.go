@@ -99,7 +99,7 @@ func setupEnv(t *testing.T, reports map[int]models.SynodReport) *testEnv {
 
 	client := ingestion.NewClient(synod.URL, 100)
 	syncer := ingestion.NewSyncer(client, store)
-	srv := api.NewServer(store, syncer, testAPIKey, testAdminUser, testAdminPass, 1000)
+	srv := api.NewServer(store, syncer, []string{testAPIKey}, testAdminUser, testAdminPass, 1000)
 	ts := httptest.NewServer(srv.Router)
 
 	return &testEnv{

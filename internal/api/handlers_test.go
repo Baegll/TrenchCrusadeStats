@@ -27,7 +27,7 @@ func testServer(t *testing.T) (*httptest.Server, *db.DB) {
 	t.Cleanup(func() { client.Close() })
 	syncer := ingestion.NewSyncer(client, store)
 
-	srv := NewServer(store, syncer, "test-key", "admin", "pass", 1000)
+	srv := NewServer(store, syncer, []string{"test-key"}, "admin", "pass", 1000)
 	t.Cleanup(func() { srv.Close() })
 
 	ts := httptest.NewServer(srv.Router)
@@ -444,7 +444,7 @@ func closedDBServer(t *testing.T) (*httptest.Server, *db.DB) {
 	t.Cleanup(func() { client.Close() })
 	syncer := ingestion.NewSyncer(client, store)
 
-	srv := NewServer(store, syncer, "test-key", "admin", "pass", 1000)
+	srv := NewServer(store, syncer, []string{"test-key"}, "admin", "pass", 1000)
 	t.Cleanup(func() { srv.Close() })
 
 	ts := httptest.NewServer(srv.Router)
@@ -516,7 +516,7 @@ func TestTriggerSync_Conflict(t *testing.T) {
 	t.Cleanup(func() { client.Close() })
 	syncer := ingestion.NewSyncer(client, store)
 
-	srv := NewServer(store, syncer, "test-key", "admin", "pass", 1000)
+	srv := NewServer(store, syncer, []string{"test-key"}, "admin", "pass", 1000)
 	t.Cleanup(func() { srv.Close() })
 
 	ts := httptest.NewServer(srv.Router)

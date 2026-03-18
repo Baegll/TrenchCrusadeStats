@@ -25,7 +25,7 @@ func (s *Server) Close() {
 }
 
 // NewServer creates the Chi router with all routes registered.
-func NewServer(store *db.DB, syncer *ingestion.Syncer, apiKey, adminUser, adminPass string, rateLimitPerMin int) *Server {
+func NewServer(store *db.DB, syncer *ingestion.Syncer, apiKeys []string, adminUser, adminPass string, rateLimitPerMin int) *Server {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(WideEventMiddleware)
@@ -68,7 +68,7 @@ func NewServer(store *db.DB, syncer *ingestion.Syncer, apiKey, adminUser, adminP
 
 	// Stats API (API key auth + rate limiting)
 	r.Group(func(r chi.Router) {
-		r.Use(APIKeyAuth(apiKey))
+		r.Use(APIKeyAuth(apiKeys))
 		r.Use(RateLimit(rl))
 		r.Get("/api/v1/stats/factions", h.GetFactionStats)
 		r.Get("/api/v1/stats/units", h.GetUnitStats)
