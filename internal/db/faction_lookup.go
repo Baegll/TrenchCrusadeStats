@@ -28,13 +28,17 @@ var knownFactions = []models.Faction{
 	{FactionSlug: "fc_ironsultanate", BaseFaction: "fc_ironsultanate", DisplayName: "Iron Sultanate", IsVariant: false},
 	{FactionSlug: "fc_ironsultanate_fv_defendersoftheironwall", BaseFaction: "fc_ironsultanate", DisplayName: "Defenders of the Iron Wall", IsVariant: true},
 	{FactionSlug: "fc_ironsultanate_fv_houseofwisdom", BaseFaction: "fc_ironsultanate", DisplayName: "House of Wisdom", IsVariant: true},
+	{FactionSlug: "fc_ironsultanate_fv_fidaiofalamut", BaseFaction: "fc_ironsultanate", DisplayName: "Fidai of Alamut", IsVariant: true},
 
 	// New Antioch
 	{FactionSlug: "fc_newantioch", BaseFaction: "fc_newantioch", DisplayName: "New Antioch", IsVariant: false},
 	{FactionSlug: "fc_newantioch_fv_alba", BaseFaction: "fc_newantioch", DisplayName: "Alba", IsVariant: true},
 	{FactionSlug: "fc_newantioch_fv_abyssinia", BaseFaction: "fc_newantioch", DisplayName: "Abyssinia", IsVariant: true},
 	{FactionSlug: "fc_newantioch_fv_papalstates", BaseFaction: "fc_newantioch", DisplayName: "Papal States", IsVariant: true},
+	{FactionSlug: "fc_newantioch_fv_papalstatesinterventionforce", BaseFaction: "fc_newantioch", DisplayName: "Papal States Intervention Force", IsVariant: true},
 	{FactionSlug: "fc_newantioch_fv_redbrigade", BaseFaction: "fc_newantioch", DisplayName: "Red Brigade", IsVariant: true},
+	{FactionSlug: "fc_newantioch_fv_expeditionaryforcedofabyssinia", BaseFaction: "fc_newantioch", DisplayName: "Expeditionary Force of Abyssinia", IsVariant: true},
+	{FactionSlug: "fc_newantioch_fv_kingdomofalbaassaultdetatchment", BaseFaction: "fc_newantioch", DisplayName: "Kingdom of Alba Assault Detachment", IsVariant: true},
 	// These two use _fc_ instead of _fv_ — inconsistent upstream encoding
 	{FactionSlug: "fc_newantioch_fc_eirerangers", BaseFaction: "fc_newantioch", DisplayName: "Eire Rangers", IsVariant: true},
 	{FactionSlug: "fc_newantioch_fc_stortruppenofthefreestateofprussia", BaseFaction: "fc_newantioch", DisplayName: "Stortruppen of the Free State of Prussia", IsVariant: true},
@@ -42,8 +46,14 @@ var knownFactions = []models.Faction{
 	// Trench Pilgrim
 	{FactionSlug: "fc_trenchpilgrim", BaseFaction: "fc_trenchpilgrim", DisplayName: "Trench Pilgrim", IsVariant: false},
 	{FactionSlug: "fc_trenchpilgrim_fv_tenthplague", BaseFaction: "fc_trenchpilgrim", DisplayName: "Tenth Plague", IsVariant: true},
+	{FactionSlug: "fc_trenchpilgrim_fv_cavalcadeofthetenthplague", BaseFaction: "fc_trenchpilgrim", DisplayName: "Cavalcade of the Tenth Plague", IsVariant: true},
 	{FactionSlug: "fc_trenchpilgrim_fv_sacredaffliction", BaseFaction: "fc_trenchpilgrim", DisplayName: "Sacred Affliction", IsVariant: true},
+	{FactionSlug: "fc_trenchpilgrim_fv_processionofthesacredaffliction", BaseFaction: "fc_trenchpilgrim", DisplayName: "Procession of the Sacred Affliction", IsVariant: true},
 	{FactionSlug: "fc_trenchpilgrim_fv_saintmethodius", BaseFaction: "fc_trenchpilgrim", DisplayName: "Saint Methodius", IsVariant: true},
+	{FactionSlug: "fc_trenchpilgrim_fv_warpilgimageofsaintmethodius", BaseFaction: "fc_trenchpilgrim", DisplayName: "War Pilgrimage of Saint Methodius", IsVariant: true},
+
+	// Heretic Legion additional variants
+	{FactionSlug: "fc_hereticlegion_fv_hereticnavalraidingparty", BaseFaction: "fc_hereticlegion", DisplayName: "Heretic Naval Raiding Party", IsVariant: true},
 }
 
 // knownBaseFactions is the list of base faction slugs sorted by length descending

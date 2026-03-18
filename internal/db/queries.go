@@ -225,7 +225,7 @@ func QueryUnitStats(ctx context.Context, pool *sql.DB, f QueryFilters) ([]models
 			COUNT(DISTINCT gu.game_report_id) FILTER (WHERE gu.result = 'win') AS win_appearances,
 			ROUND(COUNT(DISTINCT gu.game_report_id) FILTER (WHERE gu.result = 'win') * 1.0
 				/ NULLIF(COUNT(DISTINCT gu.game_report_id), 0), 4) AS win_rate,
-			ROUND(COUNT(DISTINCT gu.game_report_id) * 100.0 / NULLIF(ft.total, 0), 2) AS pick_pct
+			ROUND(COUNT(DISTINCT gu.game_report_id) * 1.0 / NULLIF(ft.total, 0), 4) AS pick_pct
 		FROM game_units gu
 		JOIN games g ON g.game_report_id = gu.game_report_id
 		LEFT JOIN faction_totals ft ON ft.base_faction = gu.base_faction
@@ -384,7 +384,7 @@ func QueryWarbandCostStats(ctx context.Context, pool *sql.DB, f QueryFilters) ([
 func QueryDeedStats(ctx context.Context, pool *sql.DB, f QueryFilters) ([]models.DeedStat, error) {
 	rows, err := pool.QueryContext(ctx, `
 		SELECT
-			gd.deed_id, gd.deed_name,
+			gd.deed_id, ANY_VALUE(TRIM(gd.deed_name)) AS deed_name,
 			COUNT(*) AS total_occurrences,
 			COUNT(gd.warband_id) AS attributed_occurrences,
 			COUNT(DISTINCT gd.game_report_id) AS games_with_deed
@@ -394,7 +394,8 @@ func QueryDeedStats(ctx context.Context, pool *sql.DB, f QueryFilters) ([]models
 		  AND ($2::TIMESTAMP IS NULL OR g.report_date >= $2)
 		  AND ($3::TIMESTAMP IS NULL OR g.report_date <= $3)
 		  AND ($4::VARCHAR IS NULL OR g.scenario_id = $4)
-		GROUP BY gd.deed_id, gd.deed_name
+		  AND TRIM(gd.deed_name) != ''
+		GROUP BY gd.deed_id, LOWER(TRIM(gd.deed_name))
 		ORDER BY total_occurrences DESC
 	`, f.RankedOnly, f.Since, f.Until, f.Scenario)
 	if err != nil {

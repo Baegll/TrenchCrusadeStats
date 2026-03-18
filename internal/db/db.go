@@ -52,6 +52,14 @@ func Open(ctx context.Context, path string, migrations Migrations) (*DB, error) 
 
 	d := &DB{pool: pool}
 
+	// Cap DuckDB memory to leave room for the Go runtime
+	if _, err := pool.ExecContext(ctx, "SET memory_limit='150MB'"); err != nil {
+		slog.Warn("failed to set memory_limit", "err", err)
+	}
+	if _, err := pool.ExecContext(ctx, "SET threads=2"); err != nil {
+		slog.Warn("failed to set threads", "err", err)
+	}
+
 	// Load DuckDB JSON extension (required for JSON column type)
 	if _, err := pool.ExecContext(ctx, "INSTALL json; LOAD json;"); err != nil {
 		// May already be loaded or auto-loaded; try just LOAD
